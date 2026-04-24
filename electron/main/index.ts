@@ -2,6 +2,10 @@ import { app, shell, BrowserWindow, ipcMain, net, dialog } from 'electron'
 import { join } from 'path'
 import { readFileSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { PDFParse } from 'pdf-parse'
+import mammoth from 'mammoth'
+import * as XLSX from 'xlsx'
+import JSZip from 'jszip'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -216,6 +220,60 @@ ipcMain.handle('skills:import-file', async () => {
   try {
     const content = readFileSync(result.filePaths[0], 'utf-8')
     return { data: content }
+  } catch (err) {
+    return { error: String(err) }
+  }
+})
+
+// ─── File parser ─────────────────────────────────────────────────────────────
+
+ipcMain.handle('chat:parse-file', async (_event, { name, buffer }: { name: string; buffer: Buffer }) => {
+  const ext = name.split('.').pop()?.toLowerCase() ?? ''
+  try {
+    if (ext === 'pdf') {
+      const parser = new PDFParse({ data: Buffer.from(buffer) })
+      const result = await parser.getText()
+      return { text: result.text }
+    }
+
+    if (ext === 'docx') {
+      const result = await mammoth.extractRawText({ buffer: Buffer.from(buffer) })
+      return { text: result.value }
+    }
+
+    if (ext === 'xlsx' || ext === 'xls') {
+      const workbook = XLSX.read(Buffer.from(buffer))
+      const parts: string[] = []
+      for (const sheetName of workbook.SheetNames) {
+        const csv = XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName])
+        if (csv.trim()) parts.push(`[Sheet: ${sheetName}]\n${csv}`)
+      }
+      return { text: parts.join('\n\n') }
+    }
+
+    if (ext === 'pptx') {
+      const zip = await JSZip.loadAsync(Buffer.from(buffer))
+      const slideEntries = Object.keys(zip.files)
+        .filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n))
+        .sort((a, b) => {
+          const na = parseInt(a.match(/\d+/)?.[0] ?? '0')
+          const nb = parseInt(b.match(/\d+/)?.[0] ?? '0')
+          return na - nb
+        })
+      const parts: string[] = []
+      let slideNum = 1
+      for (const entry of slideEntries) {
+        const xml = await zip.files[entry].async('string')
+        const texts = (xml.match(/<a:t[^>]*>([^<]*)<\/a:t>/g) ?? [])
+          .map((t) => t.replace(/<[^>]+>/g, ''))
+          .filter(Boolean)
+        if (texts.length) parts.push(`[Slide ${slideNum}]\n${texts.join(' ')}`)
+        slideNum++
+      }
+      return { text: parts.join('\n\n') }
+    }
+
+    return { error: `Unsupported format: .${ext}` }
   } catch (err) {
     return { error: String(err) }
   }

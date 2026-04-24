@@ -25,5 +25,6 @@ interface Window {
       apiKey: string
     }) => Promise<{ data?: unknown; error?: string }>
     skillImportFile: () => Promise<{ data?: string; error?: string; canceled?: boolean }>
+    parseFile: (params: { name: string; buffer: ArrayBuffer }) => Promise<{ text?: string; error?: string }>
   }
 }

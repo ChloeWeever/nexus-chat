@@ -1,12 +1,13 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { Send, Square, Globe, Puzzle } from 'lucide-react'
+import { Send, Square, Globe, Puzzle, Paperclip, X, FileText, Loader2, AlertCircle } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { cn, generateId } from '@/lib/utils'
 import {
   WEB_SEARCH_TOOL,
   buildUseSkillTool,
   buildSkillsSystemMessage,
   type OpenAIMessage,
+  type OpenAIContentPart,
   type OpenAIToolCall
 } from '@/lib/tools'
 import type { ToolUseInfo, Skill } from '@/types'
@@ -14,6 +15,19 @@ import type { ToolUseInfo, Skill } from '@/types'
 interface MessageInputProps {
   conversationId: string
 }
+
+interface AttachedFileState {
+  id: string
+  name: string
+  type: 'text' | 'image'
+  content?: string
+  dataUrl?: string
+  mimeType?: string
+  parsing?: boolean
+  parseError?: string
+}
+
+const BINARY_EXTENSIONS = new Set(['pdf', 'docx', 'xlsx', 'xls', 'pptx'])
 
 // ─── Slash-command helpers ────────────────────────────────────────────────────
 
@@ -73,10 +87,21 @@ function SlashMenu({
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function MessageInput({ conversationId }: MessageInputProps): JSX.Element {
+function readFileAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+export default function MessageInput({ conversationId }: MessageInputProps) {
   const [input, setInput] = useState('')
   const [showSlashMenu, setShowSlashMenu] = useState(false)
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFileState[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
 
   const {
@@ -162,6 +187,47 @@ export default function MessageInput({ conversationId }: MessageInputProps): JSX
     setIsStreaming(false)
   }
 
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
+    for (const file of files) {
+      if (file.type.startsWith('image/')) {
+        const dataUrl = await readFileAsDataURL(file)
+        setAttachedFiles((prev) => [
+          ...prev,
+          { id: generateId(), name: file.name, type: 'image', dataUrl, mimeType: file.type }
+        ])
+      } else {
+        const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+        if (BINARY_EXTENSIONS.has(ext)) {
+          const id = generateId()
+          setAttachedFiles((prev) => [...prev, { id, name: file.name, type: 'text', parsing: true }])
+          const buffer = await file.arrayBuffer()
+          const result = await window.api.parseFile({ name: file.name, buffer })
+          setAttachedFiles((prev) =>
+            prev.map((f) =>
+              f.id !== id
+                ? f
+                : result.error
+                  ? { ...f, parsing: false, parseError: result.error }
+                  : { ...f, parsing: false, content: result.text }
+            )
+          )
+        } else {
+          const content = await file.text()
+          setAttachedFiles((prev) => [
+            ...prev,
+            { id: generateId(), name: file.name, type: 'text', content }
+          ])
+        }
+      }
+    }
+    e.target.value = ''
+  }
+
+  const removeAttachment = (id: string) => {
+    setAttachedFiles((prev) => prev.filter((f) => f.id !== id))
+  }
+
   const streamInto = (
     messages: OpenAIMessage[],
     assistantMsgId: string,
@@ -196,9 +262,11 @@ export default function MessageInput({ conversationId }: MessageInputProps): JSX
 
   const handleSubmit = useCallback(async () => {
     const text = input.trim()
-    if (!text || isStreaming || !conversation) return
+    const isParsing = attachedFiles.some((f) => f.parsing)
+    if ((!text && attachedFiles.length === 0) || isStreaming || isParsing || !conversation) return
 
     setInput('')
+    setAttachedFiles([])
     setShowSlashMenu(false)
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
 
@@ -210,12 +278,44 @@ export default function MessageInput({ conversationId }: MessageInputProps): JSX
       ? skills.find((s) => s.name === slashCmd.name && s.enabled)
       : null
 
-    const userContent = explicitSkill ? (slashCmd!.args || `/${explicitSkill.name}`) : text
+    const baseText = explicitSkill ? (slashCmd!.args || `/${explicitSkill.name}`) : text
+
+    // ── Build display content (labels only, no file bodies) ──────────────────
+    const attachmentLabels = attachedFiles.map((f) =>
+      f.type === 'text' ? `[File: ${f.name}]` : `[Image: ${f.name}]`
+    )
+    const displayContent = [baseText, ...attachmentLabels].filter(Boolean).join('\n')
+
+    // ── Build API content (includes file bodies and/or multimodal) ───────────
+    const textFiles = attachedFiles.filter((f) => f.type === 'text' && f.content && !f.parseError)
+    const imageFiles = attachedFiles.filter((f) => f.type === 'image')
+
+    let apiText = baseText
+    for (const f of textFiles) {
+      const ext = f.name.split('.').pop() ?? 'text'
+      apiText += `\n\n**File: ${f.name}**\n\`\`\`${ext}\n${f.content}\n\`\`\``
+    }
+
+    const apiUserContent: string | OpenAIContentPart[] =
+      imageFiles.length > 0
+        ? [
+            { type: 'text', text: apiText },
+            ...imageFiles.map((f) => ({
+              type: 'image_url' as const,
+              image_url: { url: f.dataUrl! }
+            }))
+          ]
+        : apiText
 
     addMessage(conversationId, {
       role: 'user',
-      content: userContent,
-      skillUsed: explicitSkill?.name
+      content: displayContent,
+      skillUsed: explicitSkill?.name,
+      attachments: attachedFiles.map((f) => ({
+        name: f.name,
+        type: f.type,
+        dataUrl: f.type === 'image' ? f.dataUrl : undefined
+      }))
     })
 
     // ── Build system messages ─────────────────────────────────────────────────
@@ -224,23 +324,22 @@ export default function MessageInput({ conversationId }: MessageInputProps): JSX
       systemMsgs.push({ role: 'system', content: settings.chat.systemPrompt })
     }
 
-    // Skills eligible for auto-invocation (disable-model-invocation: false)
     const autoSkills = skills.filter((s) => s.enabled && !s.disableModelInvocation)
 
     if (explicitSkill) {
-      // Explicit /command: inject full instructions directly, skip tool loop
       systemMsgs.push({ role: 'system', content: explicitSkill.instructions })
     } else if (autoSkills.length > 0) {
-      // Layer 1: inject name + description summary so agent knows what's available
       systemMsgs.push({ role: 'system', content: buildSkillsSystemMessage(autoSkills) })
     }
 
+    const historyMessages = conversation.messages
+      .filter((m) => m.role !== 'system' && m.content.trim() !== '' && !m.error)
+      .map((m) => ({ role: m.role as OpenAIMessage['role'], content: m.content }))
+
     const historyMsgs: OpenAIMessage[] = [
-      ...conversation.messages.filter(
-        (m) => m.role !== 'system' && m.content.trim() !== '' && !m.error
-      ),
-      { role: 'user', content: userContent }
-    ].map((m) => ({ role: m.role as OpenAIMessage['role'], content: m.content }))
+      ...historyMessages,
+      { role: 'user' as const, content: apiUserContent }
+    ]
 
     const messages: OpenAIMessage[] = [...systemMsgs, ...historyMsgs]
 
@@ -255,7 +354,6 @@ export default function MessageInput({ conversationId }: MessageInputProps): JSX
     const webSearchEnabled = settings.chat.webSearchEnabled && !!settings.chat.ollamaApiKey
 
     // ── Agentic tool loop ─────────────────────────────────────────────────────
-    // Triggered when: web search is on, OR auto-invocable skills exist AND no explicit command
     const tools = [
       ...(webSearchEnabled ? [WEB_SEARCH_TOOL] : []),
       ...(!explicitSkill && autoSkills.length > 0
@@ -294,7 +392,6 @@ export default function MessageInput({ conversationId }: MessageInputProps): JSX
       const choice = firstData.choices?.[0]
 
       if (choice?.finish_reason !== 'tool_calls' || !choice.message.tool_calls?.length) {
-        // Agent decided no tool is needed — stream what it returned directly
         appendToMessage(conversationId, assistantMsgId, choice?.message?.content ?? '')
         finalizeMessage(conversationId, assistantMsgId)
         setIsStreaming(false)
@@ -314,7 +411,6 @@ export default function MessageInput({ conversationId }: MessageInputProps): JSX
         }
 
         if (call.function.name === 'web_search') {
-          // ── Web search ──────────────────────────────────────────────────
           const query = String(args.query ?? '')
           setMessageStatus(conversationId, assistantMsgId, `Searching "${query}"…`)
 
@@ -349,14 +445,11 @@ export default function MessageInput({ conversationId }: MessageInputProps): JSX
             error: searchResult.error
           })
         } else if (call.function.name === 'use_skill') {
-          // ── Skill progressive disclosure: agent loads the full instructions ─
           const skillName = String(args.skill_name ?? '')
           const skill = autoSkills.find((s) => s.name === skillName)
 
           if (skill) {
             setMessageStatus(conversationId, assistantMsgId, `Reading /${skill.name}…`)
-
-            // Layer 2: return the full SKILL.md instruction body as the tool result
             toolCallResults.push({
               role: 'tool',
               tool_call_id: call.id,
@@ -380,8 +473,6 @@ export default function MessageInput({ conversationId }: MessageInputProps): JSX
 
       setMessageToolUse(conversationId, assistantMsgId, toolUseInfo)
 
-      // Stream the final answer; the model now has both search results and/or
-      // the full skill instructions available as tool context
       const augmented: OpenAIMessage[] = [
         ...messages,
         {
@@ -434,6 +525,7 @@ export default function MessageInput({ conversationId }: MessageInputProps): JSX
     }
   }, [
     input,
+    attachedFiles,
     isStreaming,
     conversation,
     conversationId,
@@ -454,6 +546,8 @@ export default function MessageInput({ conversationId }: MessageInputProps): JSX
   const activeSkill = slashCmd ? skills.find((s) => s.name === slashCmd.name && s.enabled) : null
   const webSearchActive = settings.chat.webSearchEnabled && !!settings.chat.ollamaApiKey
   const autoSkillCount = skills.filter((s) => s.enabled && !s.disableModelInvocation).length
+  const isParsing = attachedFiles.some((f) => f.parsing)
+  const canSend = !!(input.trim() || attachedFiles.length > 0) && !isParsing
 
   return (
     <div className="px-4 pb-4 pt-2 shrink-0">
@@ -493,56 +587,135 @@ export default function MessageInput({ conversationId }: MessageInputProps): JSX
 
         <div
           className={cn(
-            'flex items-end gap-2 rounded-2xl border border-border/80 bg-card',
+            'rounded-2xl border border-border/80 bg-card',
             'shadow-sm transition-colors',
             'focus-within:border-primary/50 focus-within:shadow-primary/5 focus-within:shadow-md',
             activeSkill && 'border-primary/30 bg-primary/[0.02]'
           )}
         >
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => handleInputChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onBlur={() => setTimeout(() => setShowSlashMenu(false), 150)}
-            placeholder="Message… (type / for skills)"
-            rows={1}
-            disabled={isStreaming}
-            className={cn(
-              'flex-1 resize-none bg-transparent px-4 py-3.5 text-sm',
-              'placeholder:text-muted-foreground/60 focus:outline-none',
-              'min-h-[52px] max-h-[200px] leading-relaxed selectable',
-              isStreaming && 'opacity-50'
-            )}
-          />
+          {/* Attached files preview */}
+          {attachedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-2 px-3 pt-3">
+              {attachedFiles.map((f) => (
+                <div key={f.id} className="relative group">
+                  {f.type === 'image' ? (
+                    <div className="relative">
+                      <img
+                        src={f.dataUrl}
+                        alt={f.name}
+                        className="h-16 w-16 object-cover rounded-lg border border-border/60"
+                      />
+                      <div className="absolute inset-0 rounded-lg bg-black/0 group-hover:bg-black/10 transition-colors" />
+                    </div>
+                  ) : f.parsing ? (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted/60 border border-border/40 max-w-[160px]">
+                      <Loader2 className="h-3.5 w-3.5 text-muted-foreground shrink-0 animate-spin" />
+                      <span className="text-xs text-muted-foreground truncate">{f.name}</span>
+                    </div>
+                  ) : f.parseError ? (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-destructive/10 border border-destructive/30 max-w-[160px]" title={f.parseError}>
+                      <AlertCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
+                      <span className="text-xs text-destructive truncate">{f.name}</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted/60 border border-border/40 max-w-[160px]">
+                      <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <span className="text-xs text-foreground truncate">{f.name}</span>
+                    </div>
+                  )}
+                  <button
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      removeAttachment(f.id)
+                    }}
+                    className={cn(
+                      'absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full',
+                      'bg-muted border border-border/60 text-muted-foreground',
+                      'hover:bg-destructive hover:text-destructive-foreground hover:border-destructive',
+                      'flex items-center justify-center transition-colors'
+                    )}
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
-          <div className="flex items-center gap-1 pr-2 pb-2">
-            {isStreaming ? (
-              <button
-                onClick={handleStop}
-                className={cn(
-                  'flex items-center justify-center h-8 w-8 rounded-xl',
-                  'bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors'
-                )}
-                title="Stop generation"
-              >
-                <Square className="h-3.5 w-3.5" />
-              </button>
-            ) : (
-              <button
-                onClick={handleSubmit}
-                disabled={!input.trim()}
-                className={cn(
-                  'flex items-center justify-center h-8 w-8 rounded-xl transition-all',
-                  input.trim()
-                    ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm'
-                    : 'bg-muted text-muted-foreground cursor-not-allowed opacity-50'
-                )}
-                title="Send message"
-              >
-                <Send className="h-3.5 w-3.5" />
-              </button>
-            )}
+          <div className="flex items-end gap-2">
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*,.txt,.md,.js,.ts,.tsx,.jsx,.py,.json,.yaml,.yml,.xml,.html,.css,.rs,.go,.java,.c,.cpp,.h,.sh,.csv,.sql,.pdf,.docx,.xlsx,.xls,.pptx"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+
+            {/* Attach button */}
+            <button
+              onMouseDown={(e) => {
+                e.preventDefault()
+                fileInputRef.current?.click()
+              }}
+              disabled={isStreaming}
+              className={cn(
+                'flex items-center justify-center h-8 w-8 rounded-xl ml-2 mb-2 shrink-0 transition-colors',
+                isStreaming
+                  ? 'text-muted-foreground/30 cursor-not-allowed'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+              )}
+              title="Attach file"
+            >
+              <Paperclip className="h-4 w-4" />
+            </button>
+
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => handleInputChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onBlur={() => setTimeout(() => setShowSlashMenu(false), 150)}
+              placeholder="Message… (type / for skills)"
+              rows={1}
+              disabled={isStreaming}
+              className={cn(
+                'flex-1 resize-none bg-transparent px-2 py-3.5 text-sm',
+                'placeholder:text-muted-foreground/60 focus:outline-none',
+                'min-h-[52px] max-h-[200px] leading-relaxed selectable',
+                isStreaming && 'opacity-50'
+              )}
+            />
+
+            <div className="flex items-center gap-1 pr-2 pb-2">
+              {isStreaming ? (
+                <button
+                  onClick={handleStop}
+                  className={cn(
+                    'flex items-center justify-center h-8 w-8 rounded-xl',
+                    'bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors'
+                  )}
+                  title="Stop generation"
+                >
+                  <Square className="h-3.5 w-3.5" />
+                </button>
+              ) : (
+                <button
+                  onClick={handleSubmit}
+                  disabled={!canSend}
+                  className={cn(
+                    'flex items-center justify-center h-8 w-8 rounded-xl transition-all',
+                    canSend
+                      ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm'
+                      : 'bg-muted text-muted-foreground cursor-not-allowed opacity-50'
+                  )}
+                  title="Send message"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

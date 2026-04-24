@@ -115,6 +115,12 @@ export interface Skill {
   builtIn: boolean
 }
 
+export interface MessageAttachment {
+  name: string
+  type: 'text' | 'image'
+  dataUrl?: string  // base64 data URL for images (used for inline display)
+}
+
 export interface Message {
   id: string
   role: Role
@@ -125,6 +131,7 @@ export interface Message {
   statusText?: string         // transient: "Thinking…", cleared on first content
   isStreaming?: boolean
   error?: string
+  attachments?: MessageAttachment[]
   timestamp: number
 }
 

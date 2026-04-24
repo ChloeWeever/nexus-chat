@@ -53,10 +53,21 @@ function skillImportFile(): Promise<{ data?: string; error?: string; canceled?: 
   return ipcRenderer.invoke('skills:import-file')
 }
 
+function parseFile(params: {
+  name: string
+  buffer: ArrayBuffer
+}): Promise<{ text?: string; error?: string }> {
+  return ipcRenderer.invoke('chat:parse-file', {
+    name: params.name,
+    buffer: Buffer.from(params.buffer)
+  })
+}
+
 contextBridge.exposeInMainWorld('api', {
   platform: process.platform,
   llmStream,
   llmFetch,
   webSearch,
-  skillImportFile
+  skillImportFile,
+  parseFile
 })

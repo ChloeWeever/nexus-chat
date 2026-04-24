@@ -148,6 +148,9 @@ export default function MessageBubble({ message }: MessageBubbleProps): JSX.Elem
   const isAssistant = message.role === 'assistant'
 
   if (isUser) {
+    const imageAttachments = (message.attachments ?? []).filter(
+      (a) => a.type === 'image' && a.dataUrl
+    )
     return (
       <div className="flex justify-end mb-3 animate-fade-in">
         <div className="flex items-end gap-2 max-w-[78%]">
@@ -157,6 +160,18 @@ export default function MessageBubble({ message }: MessageBubbleProps): JSX.Elem
                 <div className="flex items-center gap-1 mb-1.5 opacity-80">
                   <Puzzle className="h-3 w-3 shrink-0" />
                   <code className="text-[11px] font-mono font-medium">/{message.skillUsed}</code>
+                </div>
+              )}
+              {imageAttachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {imageAttachments.map((a, i) => (
+                    <img
+                      key={i}
+                      src={a.dataUrl}
+                      alt={a.name}
+                      className="max-h-48 max-w-full rounded-lg object-contain border border-primary-foreground/20"
+                    />
+                  ))}
                 </div>
               )}
               <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
