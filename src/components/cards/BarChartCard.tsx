@@ -55,6 +55,7 @@ export default function BarChartCard({ title, data, className }: BarChartCardPro
               </>
             )}
             <Tooltip
+              labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? ''}
               contentStyle={{
                 backgroundColor: 'hsl(var(--card))',
                 border: '1px solid hsl(var(--border))',

@@ -42,6 +42,7 @@ export default function LineChartCard({ title, data, className }: LineChartCardP
             <XAxis dataKey="label" tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} />
             <Tooltip
+              labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? ''}
               contentStyle={{
                 backgroundColor: 'hsl(var(--card))',
                 border: '1px solid hsl(var(--border))',
