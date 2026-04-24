@@ -3,7 +3,7 @@ import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { Copy, Check, User, Bot, AlertTriangle, Globe, Puzzle, Code, RotateCcw } from 'lucide-react'
+import { Copy, Check, User, Bot, AlertTriangle, Globe, Puzzle, Code, RotateCcw, Loader2 } from 'lucide-react'
 import { useState, useRef } from 'react'
 import type { Message, TextBlock, ToolUseInfo } from '@/types'
 import { cn, formatTime } from '@/lib/utils'
@@ -32,37 +32,129 @@ function CopyButton({ text }: { text: string }) {
   )
 }
 
+// Convert a Recharts SVG to a PNG data URL, resolving CSS variables so the
+// chart renders correctly outside the app's style context.
+async function svgToPng(svgEl: SVGSVGElement): Promise<string> {
+  const bbox = svgEl.getBoundingClientRect()
+  const w = Math.round(bbox.width)
+  const h = Math.round(bbox.height)
+  if (w === 0 || h === 0) throw new Error('empty svg')
+
+  const clone = svgEl.cloneNode(true) as SVGSVGElement
+  clone.setAttribute('width', String(w))
+  clone.setAttribute('height', String(h))
+
+  // Resolve Tailwind CSS-variable classes used by Recharts
+  const cs = getComputedStyle(document.documentElement)
+  const border = cs.getPropertyValue('--border').trim()
+  const muted = cs.getPropertyValue('--muted-foreground').trim()
+  const card = cs.getPropertyValue('--card').trim()
+
+  const styleEl = document.createElementNS('http://www.w3.org/2000/svg', 'style')
+  styleEl.textContent =
+    `.stroke-border\\/40{stroke:hsl(${border}/0.4)}` +
+    `.fill-muted-foreground{fill:hsl(${muted})}`
+  clone.prepend(styleEl)
+
+  // White/card-colored background so the chart isn't transparent
+  const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+  bg.setAttribute('width', '100%')
+  bg.setAttribute('height', '100%')
+  bg.setAttribute('fill', `hsl(${card})`)
+  styleEl.insertAdjacentElement('afterend', bg)
+
+  const xml = new XMLSerializer().serializeToString(clone)
+  const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }))
+
+  return new Promise<string>((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const dpr = window.devicePixelRatio || 1
+      const canvas = document.createElement('canvas')
+      canvas.width = w * dpr
+      canvas.height = h * dpr
+      const ctx = canvas.getContext('2d')!
+      ctx.scale(dpr, dpr)
+      ctx.fillStyle = `hsl(${card})`
+      ctx.fillRect(0, 0, w, h)
+      ctx.drawImage(img, 0, 0, w, h)
+      URL.revokeObjectURL(url)
+      resolve(canvas.toDataURL('image/png'))
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('load failed')) }
+    img.src = url
+  })
+}
+
+// Build the final HTML: markdown text is kept as-is; Recharts SVGs are
+// replaced with inline PNG <img> tags so the charts survive outside the app.
+async function buildCopyHtml(container: HTMLElement): Promise<string> {
+  const clone = container.cloneNode(true) as HTMLElement
+
+  const origSvgs = Array.from(
+    container.querySelectorAll<SVGSVGElement>('svg.recharts-surface')
+  )
+  const clonedContainers = Array.from(
+    clone.querySelectorAll('.recharts-responsive-container, .recharts-wrapper')
+  )
+
+  await Promise.all(
+    origSvgs.map(async (svg, i) => {
+      try {
+        const png = await svgToPng(svg)
+        const imgEl = document.createElement('img')
+        imgEl.src = png
+        imgEl.style.cssText = 'max-width:100%;display:block;border-radius:8px'
+        // Replace the outermost Recharts wrapper div in the clone
+        const target = clonedContainers[i * 2] ?? clonedContainers[i]
+        target?.parentNode?.replaceChild(imgEl, target)
+      } catch {
+        // SVG stays as-is on error
+      }
+    })
+  )
+
+  return clone.innerHTML
+}
+
 function CopyHtmlButton({ contentRef }: { contentRef: React.RefObject<HTMLDivElement | null> }) {
-  const [copied, setCopied] = useState(false)
+  const [state, setState] = useState<'idle' | 'copying' | 'copied'>('idle')
 
   const handleCopy = async () => {
-    const html = contentRef.current?.innerHTML ?? ''
+    if (!contentRef.current || state === 'copying') return
+    setState('copying')
     try {
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          'text/html': new Blob([html], { type: 'text/html' }),
-          'text/plain': new Blob([contentRef.current?.innerText ?? ''], { type: 'text/plain' })
-        })
-      ])
-    } catch {
-      // Fallback: copy as plain text
-      navigator.clipboard.writeText(contentRef.current?.innerText ?? '')
+      const html = await buildCopyHtml(contentRef.current)
+      try {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/html': new Blob([html], { type: 'text/html' }),
+            'text/plain': new Blob([contentRef.current.innerText ?? ''], { type: 'text/plain' })
+          })
+        ])
+      } catch {
+        navigator.clipboard.writeText(contentRef.current.innerText ?? '')
+      }
+    } finally {
+      setState('copied')
+      setTimeout(() => setState('idle'), 1500)
     }
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
   }
 
   return (
     <button
       onClick={handleCopy}
+      disabled={state === 'copying'}
       className={cn(
         'flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-colors',
-        'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+        'text-muted-foreground hover:text-foreground hover:bg-muted/60 disabled:opacity-50'
       )}
-      title="Copy as HTML"
+      title="Copy as HTML (charts included)"
     >
-      {copied ? (
+      {state === 'copied' ? (
         <><Check className="h-3 w-3" /><span>Copied</span></>
+      ) : state === 'copying' ? (
+        <><Loader2 className="h-3 w-3 animate-spin" /><span>Copying…</span></>
       ) : (
         <><Code className="h-3 w-3" /><span>Copy HTML</span></>
       )}
