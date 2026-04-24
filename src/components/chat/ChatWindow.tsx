@@ -4,8 +4,14 @@ import MessageBubble from './MessageBubble'
 import MessageInput from './MessageInput'
 import { Bot } from 'lucide-react'
 
-export default function ChatWindow(): JSX.Element {
-  const { conversations, activeConversationId } = useAppStore()
+export default function ChatWindow() {
+  const {
+    conversations,
+    activeConversationId,
+    isStreaming,
+    removeMessage,
+    setPendingPrompt
+  } = useAppStore()
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const conversation = conversations.find((c) => c.id === activeConversationId)
@@ -17,6 +23,40 @@ export default function ChatWindow(): JSX.Element {
   }, [conversation?.messages.length, conversation?.messages.at(-1)?.content])
 
   if (!conversation) return <></>
+
+  const visibleMessages = conversation.messages.filter((m) => m.role !== 'system')
+
+  // Find the index of the last assistant message for regenerate
+  let lastAssistantIdx = -1
+  for (let i = visibleMessages.length - 1; i >= 0; i--) {
+    if (visibleMessages[i].role === 'assistant') {
+      lastAssistantIdx = i
+      break
+    }
+  }
+
+  const handleRegenerate = () => {
+    const msgs = conversation.messages.filter((m) => m.role !== 'system')
+    // Last assistant message
+    let lastAsstIdx = -1
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === 'assistant') { lastAsstIdx = i; break }
+    }
+    if (lastAsstIdx === -1) return
+    const lastAsst = msgs[lastAsstIdx]
+
+    // Last user message before the assistant
+    let lastUserMsg = null
+    for (let i = lastAsstIdx - 1; i >= 0; i--) {
+      if (msgs[i].role === 'user') { lastUserMsg = msgs[i]; break }
+    }
+    if (!lastUserMsg) return
+
+    // Remove both messages then re-submit via pendingPrompt
+    removeMessage(conversation.id, lastAsst.id)
+    removeMessage(conversation.id, lastUserMsg.id)
+    setPendingPrompt(lastUserMsg.content)
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -36,11 +76,17 @@ export default function ChatWindow(): JSX.Element {
         className="flex-1 overflow-y-auto px-4 py-6 space-y-1"
         style={{ scrollBehavior: 'smooth' }}
       >
-        {conversation.messages
-          .filter((m) => m.role !== 'system')
-          .map((message) => (
-            <MessageBubble key={message.id} message={message} />
-          ))}
+        {visibleMessages.map((message, idx) => (
+          <MessageBubble
+            key={message.id}
+            message={message}
+            onRegenerate={
+              idx === lastAssistantIdx && !isStreaming && !message.isStreaming
+                ? handleRegenerate
+                : undefined
+            }
+          />
+        ))}
 
         {conversation.messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground">

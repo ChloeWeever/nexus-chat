@@ -28,6 +28,7 @@ interface AppStore {
   setMessageError: (conversationId: string, messageId: string, error: string) => void
   setMessageToolUse: (conversationId: string, messageId: string, toolUse: ToolUseInfo[]) => void
   setMessageStatus: (conversationId: string, messageId: string, statusText: string) => void
+  removeMessage: (conversationId: string, messageId: string) => void
 
   // Streaming state
   setIsStreaming: (value: boolean) => void
@@ -216,6 +217,19 @@ export const useAppStore = create<AppStore>()(
                 if (m.id !== messageId) return m
                 return { ...m, toolUse }
               })
+            }
+          })
+        }))
+      },
+
+      removeMessage: (conversationId, messageId) => {
+        set((state) => ({
+          conversations: state.conversations.map((c) => {
+            if (c.id !== conversationId) return c
+            return {
+              ...c,
+              messages: c.messages.filter((m) => m.id !== messageId),
+              updatedAt: Date.now()
             }
           })
         }))

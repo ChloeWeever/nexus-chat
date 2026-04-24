@@ -3,8 +3,8 @@ import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { Copy, Check, User, Bot, AlertTriangle, Globe, Puzzle } from 'lucide-react'
-import { useState } from 'react'
+import { Copy, Check, User, Bot, AlertTriangle, Globe, Puzzle, Code, RotateCcw } from 'lucide-react'
+import { useState, useRef } from 'react'
 import type { Message, TextBlock, ToolUseInfo } from '@/types'
 import { cn, formatTime } from '@/lib/utils'
 import CardRenderer from '@/components/cards/CardRenderer'
@@ -12,9 +12,10 @@ import { useAppStore } from '@/store'
 
 interface MessageBubbleProps {
   message: Message
+  onRegenerate?: () => void
 }
 
-function CopyButton({ text }: { text: string }): JSX.Element {
+function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
   return (
     <button
@@ -31,7 +32,45 @@ function CopyButton({ text }: { text: string }): JSX.Element {
   )
 }
 
-function MarkdownContent({ content, isDark }: { content: string; isDark: boolean }): JSX.Element {
+function CopyHtmlButton({ contentRef }: { contentRef: React.RefObject<HTMLDivElement | null> }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = async () => {
+    const html = contentRef.current?.innerHTML ?? ''
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([contentRef.current?.innerText ?? ''], { type: 'text/plain' })
+        })
+      ])
+    } catch {
+      // Fallback: copy as plain text
+      navigator.clipboard.writeText(contentRef.current?.innerText ?? '')
+    }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      className={cn(
+        'flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-colors',
+        'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+      )}
+      title="Copy as HTML"
+    >
+      {copied ? (
+        <><Check className="h-3 w-3" /><span>Copied</span></>
+      ) : (
+        <><Code className="h-3 w-3" /><span>Copy HTML</span></>
+      )}
+    </button>
+  )
+}
+
+function MarkdownContent({ content, isDark }: { content: string; isDark: boolean }) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -107,7 +146,7 @@ function MarkdownContent({ content, isDark }: { content: string; isDark: boolean
   )
 }
 
-function ToolUseBadges({ toolUse, isStreaming }: { toolUse: ToolUseInfo[]; isStreaming: boolean }): JSX.Element {
+function ToolUseBadges({ toolUse, isStreaming }: { toolUse: ToolUseInfo[]; isStreaming: boolean }) {
   return (
     <div className="flex flex-wrap gap-1.5 mb-2.5 pb-2.5 border-b border-border/40">
       {toolUse.map((t) => {
@@ -141,11 +180,12 @@ function ToolUseBadges({ toolUse, isStreaming }: { toolUse: ToolUseInfo[]; isStr
   )
 }
 
-export default function MessageBubble({ message }: MessageBubbleProps): JSX.Element {
+export default function MessageBubble({ message, onRegenerate }: MessageBubbleProps) {
   const { settings } = useAppStore()
   const isDark = settings.appearance.theme !== 'light'
   const isUser = message.role === 'user'
   const isAssistant = message.role === 'assistant'
+  const contentRef = useRef<HTMLDivElement>(null)
 
   if (isUser) {
     const imageAttachments = (message.attachments ?? []).filter(
@@ -189,8 +229,9 @@ export default function MessageBubble({ message }: MessageBubbleProps): JSX.Elem
   }
 
   if (isAssistant) {
+    const hasContent = !!(message.content || message.blocks?.length)
     return (
-      <div className="flex justify-start mb-3 animate-fade-in">
+      <div className="flex justify-start mb-3 animate-fade-in group/msg">
         <div className="flex items-start gap-2 max-w-[84%]">
           <div className="flex items-center justify-center h-7 w-7 rounded-full bg-muted shrink-0 mt-1">
             <Bot className="h-3.5 w-3.5 text-muted-foreground" />
@@ -232,7 +273,7 @@ export default function MessageBubble({ message }: MessageBubbleProps): JSX.Elem
 
                 {/* Finalized: render blocks (markdown + cards) */}
                 {!message.isStreaming && message.blocks && (
-                  <div className="flex flex-col gap-1">
+                  <div ref={contentRef} className="flex flex-col gap-1">
                     {message.blocks.map((block, i) => {
                       if (block.type === 'text') {
                         const textBlock = block as TextBlock
@@ -251,14 +292,37 @@ export default function MessageBubble({ message }: MessageBubbleProps): JSX.Elem
 
                 {/* Fallback: no blocks yet */}
                 {!message.isStreaming && !message.blocks && message.content && (
-                  <MarkdownContent content={message.content} isDark={isDark} />
+                  <div ref={contentRef}>
+                    <MarkdownContent content={message.content} isDark={isDark} />
+                  </div>
                 )}
               </div>
             )}
 
-            <span className="text-[10px] text-muted-foreground px-1">
-              {formatTime(message.timestamp)}
-            </span>
+            {/* Action bar */}
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[10px] text-muted-foreground">
+                {formatTime(message.timestamp)}
+              </span>
+              {!message.isStreaming && !message.error && hasContent && (
+                <div className="flex items-center gap-0.5 opacity-0 group-hover/msg:opacity-100 transition-opacity">
+                  <CopyHtmlButton contentRef={contentRef} />
+                  {onRegenerate && (
+                    <button
+                      onClick={onRegenerate}
+                      className={cn(
+                        'flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-colors',
+                        'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                      )}
+                      title="Regenerate response"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      <span>Regenerate</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
