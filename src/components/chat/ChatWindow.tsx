@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import MessageBubble from './MessageBubble'
 import MessageInput from './MessageInput'
-import { Bot } from 'lucide-react'
+import { AppIcon } from '@/components/ui/AppIcon'
 
 export default function ChatWindow() {
   const {
@@ -62,9 +62,7 @@ export default function ChatWindow() {
     <div className="flex flex-col h-full">
       {/* Header */}
       <header className="flex items-center gap-2.5 px-5 py-3.5 border-b border-border/60 shrink-0">
-        <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-primary/10">
-          <Bot className="h-4 w-4 text-primary" />
-        </div>
+        <AppIcon className="h-7 w-7 rounded-lg" />
         <span className="font-medium text-sm text-foreground truncate flex-1">
           {conversation.title}
         </span>
@@ -90,7 +88,7 @@ export default function ChatWindow() {
 
         {conversation.messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground">
-            <Bot className="h-10 w-10 opacity-20" />
+            <AppIcon className="h-10 w-10 rounded-xl opacity-30" />
             <p className="text-sm">Send a message to start the conversation</p>
           </div>
         )}

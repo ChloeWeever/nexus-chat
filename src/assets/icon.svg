@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" width="480" height="480" viewBox="400 270 480 480" xml:space="preserve">
+<desc>Created with Fabric.js 5.3.0</desc>
+<defs>
+</defs>
+<g transform="matrix(1 0 0 1 640 512)" id="background-logo"  >
+<rect style="stroke: none; stroke-width: 0; stroke-dasharray: none; stroke-linecap: butt; stroke-dashoffset: 0; stroke-linejoin: miter; stroke-miterlimit: 4; fill: rgb(255,255,255); fill-opacity: 0; fill-rule: nonzero; opacity: 1;"  paint-order="stroke"  x="-640" y="-512" rx="0" ry="0" width="1280" height="1024" />
+</g>
+<g transform="matrix(1.9211538461538462 0 0 1.9211538461538462 639.3936929500875 511.12691784812597)" id="logo-logo"  >
+<g style=""  paint-order="stroke"   >
+		<g transform="matrix(0.9900886194029851 0 0 0.9900886194029851 0 2.842171e-14)"  >
+<path style="stroke: none; stroke-width: 1; stroke-dasharray: none; stroke-linecap: butt; stroke-dashoffset: 0; stroke-linejoin: miter; stroke-miterlimit: 4; fill: rgb(139,83,255); fill-rule: nonzero; opacity: 1;"  paint-order="stroke"  transform=" translate(-100, -100)" d="M 0 200 L 200 200 L 200 0 L 0 0 L 0 200 z M 10 10 L 190 10 L 190 190 L 10 190 L 10 10 z" stroke-linecap="round" />
+</g>
+</g>
+</g>
+<g transform="matrix(1.9211538461538462 0 0 1.9211538461538462 638.5061198731644 517.9645365108667)" id="tagline-e24f4837-2665-4e60-9256-dc5e55591794-logo"  >
+<g style=""  paint-order="stroke"   >
+		<g transform="matrix(1 0 0 1 0 0)" id="tagline-e24f4837-2665-4e60-9256-dc5e55591794-logo-path-0"  >
+<linearGradient id="SVGID_543379" gradientUnits="userSpaceOnUse" gradientTransform="matrix(1 0 0 1 5.280000000000001 -92.4)"  x1="-5.282321660679429" y1="-23.646479999999997" x2="-5.282321660679429" y2="125.35352">
+<stop offset="0%" style="stop-color:rgb(48,35,174);stop-opacity: 1"/>
+<stop offset="100%" style="stop-color:rgb(200,109,215);stop-opacity: 1"/>
+</linearGradient>
+<filter id="SVGID_543377" y="-23.241162506105162%" height="146.4823250122103%" x="-48.86308939515392%" width="197.72617879030784%" >
+	<feGaussianBlur in="SourceAlpha" stdDeviation="0"></feGaussianBlur>
+	<feOffset dx="14.974170778205853" dy="2.99483415564117" result="oBlur" ></feOffset>
+	<feFlood flood-color="rgb(197,205,219)" flood-opacity="1"/>
+	<feComposite in2="oBlur" operator="in" />
+	<feMerge>
+		<feMergeNode></feMergeNode>
+		<feMergeNode in="SourceGraphic"></feMergeNode>
+	</feMerge>
+</filter>
+<path style="stroke: rgb(240,243,249); stroke-width: 2.99483415564117; stroke-dasharray: none; stroke-linecap: butt; stroke-dashoffset: 0; stroke-linejoin: miter; stroke-miterlimit: 4; fill: url(#SVGID_543379); fill-rule: nonzero; opacity: 1;filter: url(#SVGID_543377);"  paint-order="stroke"  transform=" translate(-31.22, 46.2)" d="M 5.28 -92.4 L 5.28 0 L 19.8 0 L 19.8 -54.65 L 42.64 0 L 57.16 0 L 57.16 -92.4 L 42.64 -92.4 L 42.64 -34.72 L 18.48 -92.4 Z" stroke-linecap="round" />
+</g>
+</g>
+</g>
+</svg>

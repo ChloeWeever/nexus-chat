@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Plus, MessageSquare, Trash2, Settings, Bot, ChevronRight } from 'lucide-react'
+import { Plus, MessageSquare, Trash2, Settings, ChevronRight } from 'lucide-react'
 import { useAppStore } from '@/store'
 import type { Conversation } from '@/types'
 import { cn } from '@/lib/utils'
 import SettingsSheet from '@/components/settings/SettingsSheet'
+import { AppIcon } from '@/components/ui/AppIcon'
 
 export default function Sidebar(): JSX.Element {
   const {
@@ -29,9 +30,7 @@ export default function Sidebar(): JSX.Element {
       <aside className="flex w-[240px] shrink-0 flex-col border-r border-border/60 bg-muted/20">
         {/* Logo / title bar */}
         <div className="flex items-center gap-2.5 px-4 py-4 drag-region">
-          <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-primary shrink-0 no-drag">
-            <Bot className="h-4 w-4 text-primary-foreground" />
-          </div>
+          <AppIcon className="h-7 w-7 rounded-lg shrink-0 no-drag" />
           <span className="font-semibold text-sm tracking-tight">Nexus Chat</span>
         </div>
 

@@ -1,5 +1,6 @@
-import { Bot, Sparkles, BarChart2, Table2, TrendingUp } from 'lucide-react'
+import { Sparkles, BarChart2, Table2, TrendingUp } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { AppIcon } from '@/components/ui/AppIcon'
 
 const EXAMPLE_PROMPTS = [
   {
@@ -36,9 +37,7 @@ export default function WelcomeScreen(): JSX.Element {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-8 p-8">
       <div className="flex flex-col items-center gap-3">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-          <Bot className="h-7 w-7 text-primary" />
-        </div>
+        <AppIcon className="h-14 w-14 rounded-2xl" />
         <div className="text-center">
           <h1 className="text-2xl font-semibold tracking-tight">Nexus Chat</h1>
           <p className="text-muted-foreground text-sm mt-1">

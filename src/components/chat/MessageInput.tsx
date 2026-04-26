@@ -661,7 +661,7 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
               }}
               disabled={isStreaming}
               className={cn(
-                'flex items-center justify-center h-8 w-8 rounded-xl ml-2 mb-2 shrink-0 transition-colors',
+                'flex items-center justify-center h-8 w-8 rounded-xl ml-2 mb-[10px] shrink-0 transition-colors',
                 isStreaming
                   ? 'text-muted-foreground/30 cursor-not-allowed'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
@@ -688,7 +688,7 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
               )}
             />
 
-            <div className="flex items-center gap-1 pr-2 pb-2">
+            <div className="flex items-center gap-1 pr-2 pb-[10px]">
               {isStreaming ? (
                 <button
                   onClick={handleStop}
