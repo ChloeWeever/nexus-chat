@@ -4,7 +4,7 @@
   <p>AI chat desktop app with rich data visualization, powered by LiteLLM</p>
   <p>
     <a href="LICENSE">GPL-3.0 License</a>
-    · Copyright (c) 2024 ChloeWeever
+    · Copyright (c) 2026 ChloeWeever
   </p>
 </div>
 
