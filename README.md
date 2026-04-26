@@ -2,6 +2,10 @@
   <img src="src/assets/icon.svg" alt="Nexus Chat" width="96" />
   <h1>Nexus Chat</h1>
   <p>AI chat desktop app with rich data visualization, powered by LiteLLM</p>
+  <p>
+    <a href="LICENSE">GPL-3.0 License</a>
+    · Copyright (c) 2024 ChloeWeever
+  </p>
 </div>
 
 ---
