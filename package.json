@@ -67,7 +67,7 @@
       "out/**/*"
     ],
     "win": {
-      "target": "nsis",
+      "target": "portable",
       "icon": "resources/icon.png"
     },
     "mac": {
