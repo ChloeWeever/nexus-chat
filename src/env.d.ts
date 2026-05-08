@@ -29,5 +29,6 @@ interface Window {
     skillImportFile: () => Promise<{ data?: string; error?: string; canceled?: boolean }>
     parseFile: (params: { name: string; buffer: ArrayBuffer }) => Promise<{ text?: string; error?: string }>
     runJS: (params: { code: string }) => Promise<{ output?: string; error?: string }>
+    ocrImage: (params: { dataUrl: string }) => Promise<{ text?: string; error?: string }>
   }
 }

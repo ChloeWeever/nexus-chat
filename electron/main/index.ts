@@ -2,6 +2,7 @@ import { app, shell, BrowserWindow, ipcMain, net, dialog } from 'electron'
 import { join } from 'path'
 import { readFileSync } from 'fs'
 import { Worker } from 'worker_threads'
+import Tesseract from 'tesseract.js'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { PDFParse } from 'pdf-parse'
 import mammoth from 'mammoth'
@@ -455,6 +456,19 @@ ipcMain.handle('chat:parse-file', async (_event, { name, buffer }: { name: strin
     }
 
     return { error: `Unsupported format: .${ext}` }
+  } catch (err) {
+    return { error: String(err) }
+  }
+})
+
+// ─── OCR ─────────────────────────────────────────────────────────────────────
+
+ipcMain.handle('chat:ocr-image', async (_event, { dataUrl }: { dataUrl: string }) => {
+  try {
+    const base64 = dataUrl.split(',')[1]
+    const buffer = Buffer.from(base64, 'base64')
+    const { data: { text } } = await Tesseract.recognize(buffer, 'eng+chi_sim', { logger: () => {} })
+    return { text: text.trim() }
   } catch (err) {
     return { error: String(err) }
   }
