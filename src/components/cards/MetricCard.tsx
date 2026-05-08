@@ -1,54 +1,42 @@
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { Card, FlexBox, FlexBoxDirection, FlexBoxWrap, Text, ObjectStatus } from '@ui5/webcomponents-react'
 import type { MetricData } from '@/types'
-import { cn } from '@/lib/utils'
 
 interface MetricCardProps {
   data: MetricData
   className?: string
 }
 
+function trendToState(trend?: string): 'Positive' | 'Negative' | 'None' {
+  if (trend === 'up') return 'Positive'
+  if (trend === 'down') return 'Negative'
+  return 'None'
+}
+
 export default function MetricCard({ data, className }: MetricCardProps): JSX.Element {
   return (
-    <div className={cn('bg-card p-4', className)}>
-      <div
-        className={cn(
-          'grid gap-3',
-          data.metrics.length === 1 && 'grid-cols-1',
-          data.metrics.length === 2 && 'grid-cols-2',
-          data.metrics.length === 3 && 'grid-cols-3',
-          data.metrics.length >= 4 && 'grid-cols-2 sm:grid-cols-4'
-        )}
-      >
+    <Card className={className}>
+      <FlexBox wrap={FlexBoxWrap.Wrap} style={{ padding: '1rem', gap: '0.75rem' }}>
         {data.metrics.map((metric, i) => (
-          <div
+          <Card
             key={i}
-            className="rounded-lg bg-muted/30 border border-border/40 px-4 py-3 flex flex-col gap-1"
+            style={{ flex: '1 1 160px', minWidth: '140px' }}
           >
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              {metric.label}
-            </span>
-            <span className="text-2xl font-bold text-foreground tabular-nums">
-              {metric.value}
-            </span>
-            {metric.change && (
-              <span
-                className={cn(
-                  'inline-flex items-center gap-1 text-xs font-medium',
-                  metric.trend === 'up' && 'text-emerald-500',
-                  metric.trend === 'down' && 'text-red-500',
-                  metric.trend === 'neutral' && 'text-muted-foreground',
-                  !metric.trend && 'text-muted-foreground'
-                )}
-              >
-                {metric.trend === 'up' && <TrendingUp className="h-3 w-3" />}
-                {metric.trend === 'down' && <TrendingDown className="h-3 w-3" />}
-                {metric.trend === 'neutral' && <Minus className="h-3 w-3" />}
-                {metric.change}
-              </span>
-            )}
-          </div>
+            <FlexBox direction={FlexBoxDirection.Column} style={{ padding: '0.75rem 1rem', gap: '0.25rem' }}>
+              <Text style={{ fontSize: '0.75rem', color: 'var(--sapContent_LabelColor)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                {metric.label}
+              </Text>
+              <Text style={{ fontSize: '1.5rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                {metric.value}
+              </Text>
+              {metric.change && (
+                <ObjectStatus state={trendToState(metric.trend)} showDefaultIcon>
+                  {metric.change}
+                </ObjectStatus>
+              )}
+            </FlexBox>
+          </Card>
         ))}
-      </div>
-    </div>
+      </FlexBox>
+    </Card>
   )
 }
