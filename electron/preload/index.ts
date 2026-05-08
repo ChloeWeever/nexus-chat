@@ -69,6 +69,10 @@ function runJS(params: { code: string }): Promise<{ output?: string; error?: str
   return ipcRenderer.invoke('code:run-js', params)
 }
 
+function ocrImage(params: { dataUrl: string }): Promise<{ text?: string; error?: string }> {
+  return ipcRenderer.invoke('chat:ocr-image', params)
+}
+
 contextBridge.exposeInMainWorld('api', {
   platform: process.platform,
   llmStream,
@@ -76,5 +80,6 @@ contextBridge.exposeInMainWorld('api', {
   webSearch,
   skillImportFile,
   parseFile,
-  runJS
+  runJS,
+  ocrImage
 })

@@ -192,11 +192,23 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
     const files = Array.from(e.target.files ?? [])
     for (const file of files) {
       if (file.type.startsWith('image/')) {
+        const id = generateId()
         const dataUrl = await readFileAsDataURL(file)
+        // Show thumbnail with spinner while OCR runs
         setAttachedFiles((prev) => [
           ...prev,
-          { id: generateId(), name: file.name, type: 'image', dataUrl, mimeType: file.type }
+          { id, name: file.name, type: 'image', dataUrl, mimeType: file.type, parsing: true }
         ])
+        const result = await window.api.ocrImage({ dataUrl })
+        setAttachedFiles((prev) =>
+          prev.map((f) =>
+            f.id !== id
+              ? f
+              : result.error
+                ? { ...f, parsing: false, parseError: result.error }
+                : { ...f, parsing: false, type: 'text', content: result.text }
+          )
+        )
       } else {
         const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
         if (BINARY_EXTENSIONS.has(ext)) {
@@ -642,7 +654,20 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
                         alt={f.name}
                         className="h-16 w-16 object-cover rounded-lg border border-border/60"
                       />
-                      <div className="absolute inset-0 rounded-lg bg-black/0 group-hover:bg-black/10 transition-colors" />
+                      {f.parsing ? (
+                        <div className="absolute inset-0 rounded-lg flex items-center justify-center bg-black/50">
+                          <Loader2 className="h-4 w-4 text-white animate-spin" />
+                        </div>
+                      ) : f.parseError ? (
+                        <div
+                          className="absolute inset-0 rounded-lg flex items-center justify-center bg-black/50"
+                          title={f.parseError}
+                        >
+                          <AlertCircle className="h-4 w-4 text-red-400" />
+                        </div>
+                      ) : (
+                        <div className="absolute inset-0 rounded-lg bg-black/0 group-hover:bg-black/10 transition-colors" />
+                      )}
                     </div>
                   ) : f.parsing ? (
                     <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted/60 border border-border/40 max-w-[160px]">
