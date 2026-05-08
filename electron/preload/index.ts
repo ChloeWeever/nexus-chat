@@ -65,11 +65,16 @@ function parseFile(params: {
   })
 }
 
+function runJS(params: { code: string }): Promise<{ output?: string; error?: string }> {
+  return ipcRenderer.invoke('code:run-js', params)
+}
+
 contextBridge.exposeInMainWorld('api', {
   platform: process.platform,
   llmStream,
   llmFetch,
   webSearch,
   skillImportFile,
-  parseFile
+  parseFile,
+  runJS
 })
