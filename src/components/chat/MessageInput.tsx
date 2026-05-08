@@ -365,7 +365,7 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
         : [])
     ]
 
-    if (tools.length > 0 && settings.litellm.provider !== 'anthropic') {
+    if (tools.length > 0) {
       setMessageStatus(conversationId, assistantMsgId, 'Thinking…')
 
       const firstResult = await window.api.llmFetch({

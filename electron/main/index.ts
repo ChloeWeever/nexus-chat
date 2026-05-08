@@ -57,6 +57,13 @@ type OAIContentPart =
   | { type: 'text'; text: string }
   | { type: 'image_url'; image_url: { url: string } }
 
+interface OAIMessage {
+  role: string
+  content: string | OAIContentPart[] | null
+  tool_calls?: Array<{ id: string; type: string; function: { name: string; arguments: string } }>
+  tool_call_id?: string
+}
+
 function getLLMTarget(req: LLMRequest): { url: string; headers: Record<string, string> } {
   if (req.provider === 'anthropic') {
     const base = (req.baseUrl.trim() || 'https://api.anthropic.com/v1').replace(/\/$/, '')
@@ -91,7 +98,8 @@ function getLLMTarget(req: LLMRequest): { url: string; headers: Record<string, s
   }
 }
 
-function toAnthropicContent(content: string | OAIContentPart[]): unknown {
+function toAnthropicContent(content: string | OAIContentPart[] | null): unknown {
+  if (!content) return ''
   if (typeof content === 'string') return content
   return content.map((part) => {
     if (part.type === 'text') return { type: 'text', text: part.text }
@@ -103,22 +111,76 @@ function toAnthropicContent(content: string | OAIContentPart[]): unknown {
   })
 }
 
+function toAnthropicTools(
+  tools: Array<{ type: string; function: { name: string; description?: string; parameters: unknown } }>
+): unknown[] {
+  return tools.map((t) => ({
+    name: t.function.name,
+    description: t.function.description ?? '',
+    input_schema: t.function.parameters
+  }))
+}
+
 function buildAnthropicBody(body: Record<string, unknown>): Record<string, unknown> {
-  const messages = (body.messages as Array<{ role: string; content: string | OAIContentPart[] }>) ?? []
+  const messages = (body.messages as OAIMessage[]) ?? []
+
   const system = messages
     .filter((m) => m.role === 'system')
     .map((m) => (typeof m.content === 'string' ? m.content : ''))
     .filter(Boolean)
     .join('\n\n')
-  const chatMessages = messages
-    .filter((m) => m.role !== 'system')
-    .map((m) => ({ role: m.role, content: toAnthropicContent(m.content) }))
+
+  const nonSystem = messages.filter((m) => m.role !== 'system')
+  const anthropicMessages: unknown[] = []
+  let i = 0
+
+  while (i < nonSystem.length) {
+    const msg = nonSystem[i]
+
+    if (msg.role === 'tool') {
+      // Collect consecutive tool results into a single Anthropic user message
+      const toolResults: unknown[] = []
+      while (i < nonSystem.length && nonSystem[i].role === 'tool') {
+        const tm = nonSystem[i]
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: tm.tool_call_id,
+          content: typeof tm.content === 'string' ? tm.content : ''
+        })
+        i++
+      }
+      anthropicMessages.push({ role: 'user', content: toolResults })
+      continue
+    }
+
+    if (msg.role === 'assistant' && msg.tool_calls?.length) {
+      const content: unknown[] = []
+      if (msg.content) content.push({ type: 'text', text: msg.content })
+      for (const tc of msg.tool_calls) {
+        let input: unknown = {}
+        try { input = JSON.parse(tc.function.arguments) } catch { /* ignore */ }
+        content.push({ type: 'tool_use', id: tc.id, name: tc.function.name, input })
+      }
+      anthropicMessages.push({ role: 'assistant', content })
+      i++
+      continue
+    }
+
+    anthropicMessages.push({ role: msg.role, content: toAnthropicContent(msg.content) })
+    i++
+  }
+
+  const tools = body.tools
+    ? toAnthropicTools(body.tools as Array<{ type: string; function: { name: string; description?: string; parameters: unknown } }>)
+    : undefined
+
   return {
     model: body.model,
     max_tokens: body.max_tokens,
     temperature: body.temperature,
     ...(system ? { system } : {}),
-    messages: chatMessages,
+    messages: anthropicMessages,
+    ...(tools ? { tools } : {}),
     ...(body.stream ? { stream: true } : {})
   }
 }
@@ -150,9 +212,28 @@ function isStreamDone(line: string, provider?: string): boolean {
 
 function normalizeNonStreamResponse(data: Record<string, unknown>, provider?: string): unknown {
   if (provider === 'anthropic') {
-    const text = (data.content as Array<{ type: string; text?: string }>)
-      ?.find((c) => c.type === 'text')?.text ?? ''
-    return { choices: [{ message: { content: text } }] }
+    const content = (data.content as Array<{ type: string; text?: string; id?: string; name?: string; input?: Record<string, unknown> }>) ?? []
+    const textParts = content.filter((c) => c.type === 'text').map((c) => c.text ?? '').join('')
+    const toolUseParts = content.filter((c) => c.type === 'tool_use')
+
+    if (toolUseParts.length > 0) {
+      return {
+        choices: [{
+          finish_reason: 'tool_calls',
+          message: {
+            role: 'assistant',
+            content: textParts || null,
+            tool_calls: toolUseParts.map((t) => ({
+              id: t.id,
+              type: 'function',
+              function: { name: t.name, arguments: JSON.stringify(t.input ?? {}) }
+            }))
+          }
+        }]
+      }
+    }
+
+    return { choices: [{ finish_reason: 'stop', message: { content: textParts } }] }
   }
   return data
 }
