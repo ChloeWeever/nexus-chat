@@ -143,7 +143,10 @@ export interface Conversation {
   updatedAt: number
 }
 
+export type LLMProvider = 'litellm' | 'openai' | 'anthropic'
+
 export interface LiteLLMConfig {
+  provider: LLMProvider
   baseUrl: string
   apiKey: string
   model: string
@@ -211,6 +214,7 @@ Use cards when the user asks for data visualization, comparisons, statistics, or
 
 export const DEFAULT_SETTINGS: AppSettings = {
   litellm: {
+    provider: 'litellm',
     baseUrl: 'http://localhost:4000',
     apiKey: '',
     model: 'gpt-4o-mini',

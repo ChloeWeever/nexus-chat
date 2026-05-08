@@ -5,6 +5,7 @@ interface Window {
     platform: string
     llmStream: (
       req: {
+        provider?: string
         baseUrl: string
         apiKey: string
         body: Record<string, unknown>
@@ -15,6 +16,7 @@ interface Window {
       onError: (msg: string) => void
     ) => () => void
     llmFetch: (req: {
+      provider?: string
       baseUrl: string
       apiKey: string
       body: Record<string, unknown>

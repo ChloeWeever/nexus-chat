@@ -47,36 +47,135 @@ function createWindow(): void {
 // ─── LiteLLM streaming via main process (avoids CORS in dev) ─────────────────
 
 interface LLMRequest {
+  provider?: 'litellm' | 'openai' | 'anthropic'
   baseUrl: string
   apiKey: string
   body: Record<string, unknown>
 }
 
+type OAIContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } }
+
+function getLLMTarget(req: LLMRequest): { url: string; headers: Record<string, string> } {
+  if (req.provider === 'anthropic') {
+    const base = (req.baseUrl.trim() || 'https://api.anthropic.com/v1').replace(/\/$/, '')
+    return {
+      url: `${base}/messages`,
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': req.apiKey,
+        'anthropic-version': '2023-06-01'
+      }
+    }
+  }
+  if (req.provider === 'openai') {
+    const base = (req.baseUrl.trim() || 'https://api.openai.com/v1').replace(/\/$/, '')
+    return {
+      url: `${base}/chat/completions`,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
+        ...(req.apiKey ? { 'Authorization': `Bearer ${req.apiKey}` } : {})
+      }
+    }
+  }
+  // litellm (default)
+  return {
+    url: `${req.baseUrl.replace(/\/$/, '')}/chat/completions`,
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'text/event-stream',
+      ...(req.apiKey ? { 'Authorization': `Bearer ${req.apiKey}` } : {})
+    }
+  }
+}
+
+function toAnthropicContent(content: string | OAIContentPart[]): unknown {
+  if (typeof content === 'string') return content
+  return content.map((part) => {
+    if (part.type === 'text') return { type: 'text', text: part.text }
+    if (part.type === 'image_url') {
+      const match = part.image_url.url.match(/^data:([^;]+);base64,(.+)$/)
+      if (match) return { type: 'image', source: { type: 'base64', media_type: match[1], data: match[2] } }
+    }
+    return { type: 'text', text: '' }
+  })
+}
+
+function buildAnthropicBody(body: Record<string, unknown>): Record<string, unknown> {
+  const messages = (body.messages as Array<{ role: string; content: string | OAIContentPart[] }>) ?? []
+  const system = messages
+    .filter((m) => m.role === 'system')
+    .map((m) => (typeof m.content === 'string' ? m.content : ''))
+    .filter(Boolean)
+    .join('\n\n')
+  const chatMessages = messages
+    .filter((m) => m.role !== 'system')
+    .map((m) => ({ role: m.role, content: toAnthropicContent(m.content) }))
+  return {
+    model: body.model,
+    max_tokens: body.max_tokens,
+    temperature: body.temperature,
+    ...(system ? { system } : {}),
+    messages: chatMessages,
+    ...(body.stream ? { stream: true } : {})
+  }
+}
+
+function extractStreamDelta(line: string, provider?: string): string | null {
+  if (!line.startsWith('data: ')) return null
+  const raw = line.slice(6).trim()
+  if (raw === '[DONE]') return null
+  try {
+    const json = JSON.parse(raw)
+    if (provider === 'anthropic') {
+      if (json.type === 'content_block_delta' && json.delta?.type === 'text_delta')
+        return json.delta.text ?? null
+      return null
+    }
+    return json.choices?.[0]?.delta?.content ?? null
+  } catch {
+    return null
+  }
+}
+
+function isStreamDone(line: string, provider?: string): boolean {
+  if (provider === 'anthropic') {
+    if (!line.startsWith('data: ')) return false
+    try { return JSON.parse(line.slice(6)).type === 'message_stop' } catch { return false }
+  }
+  return line.trim() === 'data: [DONE]'
+}
+
+function normalizeNonStreamResponse(data: Record<string, unknown>, provider?: string): unknown {
+  if (provider === 'anthropic') {
+    const text = (data.content as Array<{ type: string; text?: string }>)
+      ?.find((c) => c.type === 'text')?.text ?? ''
+    return { choices: [{ message: { content: text } }] }
+  }
+  return data
+}
+
 // Each renderer call gets a unique requestId so chunks can be routed correctly
 ipcMain.handle('llm:fetch-stream', async (event, req: LLMRequest & { requestId: string }) => {
-  const url = `${req.baseUrl.replace(/\/$/, '')}/chat/completions`
+  const { url, headers } = getLLMTarget(req)
+  const body = req.provider === 'anthropic' ? buildAnthropicBody(req.body) : req.body
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Accept: 'text/event-stream'
-  }
-  if (req.apiKey) headers['Authorization'] = `Bearer ${req.apiKey}`
-
-  console.log('[LiteLLM Request]', url, JSON.stringify({ ...req.body, messages: `[${(req.body.messages as unknown[]).length} messages]` }))
+  console.log('[LLM Request]', req.provider ?? 'litellm', url, JSON.stringify({ ...body, messages: `[${(body.messages as unknown[])?.length} messages]` }))
 
   return new Promise<{ error?: string }>((resolve) => {
     const request = net.request({ url, method: 'POST' })
-
     for (const [k, v] of Object.entries(headers)) request.setHeader(k, v)
 
     request.on('response', (response) => {
-      console.log('[LiteLLM] HTTP', response.statusCode)
+      console.log('[LLM] HTTP', response.statusCode)
 
       if (response.statusCode !== 200) {
-        let body = ''
-        response.on('data', (chunk) => (body += chunk.toString()))
+        let errBody = ''
+        response.on('data', (chunk) => (errBody += chunk.toString()))
         response.on('end', () => {
-          const msg = `HTTP ${response.statusCode}: ${body}`
+          const msg = `HTTP ${response.statusCode}: ${errBody}`
           event.sender.send(`llm:chunk:${req.requestId}`, { error: msg })
           resolve({ error: msg })
         })
@@ -87,20 +186,18 @@ ipcMain.handle('llm:fetch-stream', async (event, req: LLMRequest & { requestId: 
       response.on('data', (chunk: Buffer) => {
         buffer += chunk.toString('utf8')
         const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''   // keep incomplete last line
+        buffer = lines.pop() ?? ''
 
         for (const line of lines) {
           const trimmed = line.trim()
-          if (!trimmed || trimmed === 'data: [DONE]') continue
-          if (!trimmed.startsWith('data: ')) continue
-
-          try {
-            const json = JSON.parse(trimmed.slice(6))
-            const delta = json.choices?.[0]?.delta?.content ?? ''
-            if (delta) event.sender.send(`llm:chunk:${req.requestId}`, { delta })
-          } catch {
-            // partial JSON — will be reassembled next iteration
+          if (!trimmed) continue
+          if (isStreamDone(trimmed, req.provider)) {
+            event.sender.send(`llm:chunk:${req.requestId}`, { done: true })
+            resolve({})
+            return
           }
+          const delta = extractStreamDelta(trimmed, req.provider)
+          if (delta) event.sender.send(`llm:chunk:${req.requestId}`, { delta })
         }
       })
 
@@ -120,18 +217,18 @@ ipcMain.handle('llm:fetch-stream', async (event, req: LLMRequest & { requestId: 
       resolve({ error: err.message })
     })
 
-    request.write(JSON.stringify(req.body))
+    request.write(JSON.stringify(body))
     request.end()
   })
 })
 
 // Non-streaming fallback
 ipcMain.handle('llm:fetch', async (_event, req: LLMRequest) => {
-  const url = `${req.baseUrl.replace(/\/$/, '')}/chat/completions`
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (req.apiKey) headers['Authorization'] = `Bearer ${req.apiKey}`
+  const { url, headers: baseHeaders } = getLLMTarget(req)
+  const headers = { ...baseHeaders, Accept: 'application/json' }
+  const body = req.provider === 'anthropic' ? buildAnthropicBody(req.body) : req.body
 
-  console.log('[LiteLLM Request]', url, req.body)
+  console.log('[LLM Request]', req.provider ?? 'litellm', url, body)
 
   return new Promise<{ data?: unknown; error?: string }>((resolve) => {
     const request = net.request({ url, method: 'POST' })
@@ -143,17 +240,18 @@ ipcMain.handle('llm:fetch', async (_event, req: LLMRequest) => {
     }, 60_000)
 
     request.on('response', (response) => {
-      let body = ''
-      response.on('data', (chunk) => (body += chunk.toString()))
+      let respBody = ''
+      response.on('data', (chunk) => (respBody += chunk.toString()))
       response.on('end', () => {
         clearTimeout(timer)
         if (response.statusCode !== 200) {
-          resolve({ error: `HTTP ${response.statusCode}: ${body}` })
+          resolve({ error: `HTTP ${response.statusCode}: ${respBody}` })
         } else {
           try {
-            resolve({ data: JSON.parse(body) })
+            const parsed = JSON.parse(respBody)
+            resolve({ data: normalizeNonStreamResponse(parsed, req.provider) })
           } catch {
-            resolve({ error: `Invalid JSON response: ${body.slice(0, 200)}` })
+            resolve({ error: `Invalid JSON response: ${respBody.slice(0, 200)}` })
           }
         }
       })
@@ -163,7 +261,7 @@ ipcMain.handle('llm:fetch', async (_event, req: LLMRequest) => {
       clearTimeout(timer)
       resolve({ error: err.message })
     })
-    request.write(JSON.stringify(req.body))
+    request.write(JSON.stringify(body))
     request.end()
   })
 })

@@ -115,7 +115,7 @@ export default function SettingsSheet({ open, onClose }: SettingsSheetProps): JS
           <Tabs.Root value={tab} onValueChange={setTab} className="flex flex-col flex-1 min-h-0">
             <Tabs.List className="flex px-6 pt-4 gap-1 shrink-0 flex-wrap">
               {[
-                { id: 'api', label: 'LiteLLM', icon: <Cpu className="h-3.5 w-3.5" /> },
+                { id: 'api', label: 'Provider', icon: <Cpu className="h-3.5 w-3.5" /> },
                 { id: 'model', label: 'Model', icon: <Bot className="h-3.5 w-3.5" /> },
                 { id: 'skills', label: 'Skills', icon: <Puzzle className="h-3.5 w-3.5" /> },
                 { id: 'websearch', label: 'Web Search', icon: <Globe className="h-3.5 w-3.5" /> },
@@ -140,24 +140,54 @@ export default function SettingsSheet({ open, onClose }: SettingsSheetProps): JS
             <div className="flex-1 overflow-y-auto px-6 py-5">
               {/* API Settings */}
               <Tabs.Content value="api" className="space-y-6">
+                <Section title="Provider">
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { id: 'litellm', label: 'LiteLLM' },
+                      { id: 'openai', label: 'OpenAI' },
+                      { id: 'anthropic', label: 'Anthropic' }
+                    ] as const).map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => updateSettings({ litellm: { ...settings.litellm, provider: p.id } })}
+                        className={cn(
+                          'rounded-lg border px-3 py-2 text-sm font-medium transition-all',
+                          settings.litellm.provider === p.id
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border text-muted-foreground hover:border-border/80 hover:bg-muted/30'
+                        )}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </Section>
+
                 <Section title="Connection">
                   <div>
                     <Label>Base URL</Label>
                     <Input
                       value={settings.litellm.baseUrl}
                       onChange={(v) => updateSettings({ litellm: { ...settings.litellm, baseUrl: v } })}
-                      placeholder="http://localhost:4000"
+                      placeholder={
+                        settings.litellm.provider === 'anthropic'
+                          ? 'https://api.anthropic.com/v1'
+                          : settings.litellm.provider === 'openai'
+                            ? 'https://api.openai.com/v1'
+                            : 'http://localhost:4000'
+                      }
                     />
                     <Hint>
-                      Your LiteLLM proxy URL.{' '}
-                      <a
-                        href="https://docs.litellm.ai"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary inline-flex items-center gap-0.5 hover:underline"
-                      >
-                        Docs <ExternalLink className="h-2.5 w-2.5" />
-                      </a>
+                      {settings.litellm.provider === 'anthropic' && 'Leave blank to use api.anthropic.com, or enter a custom proxy URL.'}
+                      {settings.litellm.provider === 'openai' && 'Leave blank to use api.openai.com, or enter a compatible endpoint (e.g. Azure, local).'}
+                      {settings.litellm.provider === 'litellm' && (
+                        <>
+                          Your LiteLLM proxy URL.{' '}
+                          <a href="https://docs.litellm.ai" target="_blank" rel="noopener noreferrer" className="text-primary inline-flex items-center gap-0.5 hover:underline">
+                            Docs <ExternalLink className="h-2.5 w-2.5" />
+                          </a>
+                        </>
+                      )}
                     </Hint>
                   </div>
 
@@ -167,9 +197,35 @@ export default function SettingsSheet({ open, onClose }: SettingsSheetProps): JS
                       type="password"
                       value={settings.litellm.apiKey}
                       onChange={(v) => updateSettings({ litellm: { ...settings.litellm, apiKey: v } })}
-                      placeholder="sk-... (leave blank if not required)"
+                      placeholder={
+                        settings.litellm.provider === 'anthropic'
+                          ? 'sk-ant-...'
+                          : settings.litellm.provider === 'openai'
+                            ? 'sk-...'
+                            : 'sk-... (leave blank if not required)'
+                      }
                     />
-                    <Hint>Optional if your LiteLLM instance doesn't require authentication.</Hint>
+                    <Hint>
+                      {settings.litellm.provider === 'anthropic' && (
+                        <>
+                          Get your key at{' '}
+                          <a href="https://console.anthropic.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                            console.anthropic.com
+                          </a>
+                          .
+                        </>
+                      )}
+                      {settings.litellm.provider === 'openai' && (
+                        <>
+                          Get your key at{' '}
+                          <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                            platform.openai.com
+                          </a>
+                          .
+                        </>
+                      )}
+                      {settings.litellm.provider === 'litellm' && 'Optional if your LiteLLM instance doesn\'t require authentication.'}
+                    </Hint>
                   </div>
                 </Section>
 
@@ -220,7 +276,11 @@ export default function SettingsSheet({ open, onClose }: SettingsSheetProps): JS
                       placeholder="gpt-4o-mini, claude-3-haiku, ollama/llama3..."
                     />
                     <Hint>
-                      Any model supported by your LiteLLM proxy. Examples: gpt-4o, claude-3-5-sonnet, gemini/gemini-pro
+                      {settings.litellm.provider === 'anthropic'
+                        ? 'e.g. claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5-20251001'
+                        : settings.litellm.provider === 'openai'
+                          ? 'e.g. gpt-4o, gpt-4o-mini, o3-mini'
+                          : 'Any model supported by your LiteLLM proxy. Examples: gpt-4o, claude-3-5-sonnet, gemini/gemini-pro'}
                     </Hint>
                   </div>
                 </Section>

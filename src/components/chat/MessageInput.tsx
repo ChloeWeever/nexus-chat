@@ -231,7 +231,7 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
   const streamInto = (
     messages: OpenAIMessage[],
     assistantMsgId: string,
-    req: { baseUrl: string; apiKey: string }
+    req: { provider?: string; baseUrl: string; apiKey: string }
   ): void => {
     const cleanup = window.api.llmStream(
       {
@@ -270,7 +270,11 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
     setShowSlashMenu(false)
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
 
-    const req = { baseUrl: settings.litellm.baseUrl, apiKey: settings.litellm.apiKey }
+    const req = {
+      provider: settings.litellm.provider,
+      baseUrl: settings.litellm.baseUrl,
+      apiKey: settings.litellm.apiKey
+    }
 
     // ── Detect explicit /skill-name command ───────────────────────────────────
     const slashCmd = parseSlashCommand(text)
@@ -353,7 +357,7 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
 
     const webSearchEnabled = settings.chat.webSearchEnabled && !!settings.chat.ollamaApiKey
 
-    // ── Agentic tool loop ─────────────────────────────────────────────────────
+    // ── Agentic tool loop (OpenAI/LiteLLM only) ──────────────────────────────
     const tools = [
       ...(webSearchEnabled ? [WEB_SEARCH_TOOL] : []),
       ...(!explicitSkill && autoSkills.length > 0
@@ -361,7 +365,7 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
         : [])
     ]
 
-    if (tools.length > 0) {
+    if (tools.length > 0 && settings.litellm.provider !== 'anthropic') {
       setMessageStatus(conversationId, assistantMsgId, 'Thinking…')
 
       const firstResult = await window.api.llmFetch({
@@ -721,7 +725,7 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
       </div>
 
       <p className="text-center text-[10px] text-muted-foreground/50 mt-2">
-        {settings.litellm.model} · LiteLLM
+        {settings.litellm.model} · {settings.litellm.provider === 'anthropic' ? 'Anthropic' : settings.litellm.provider === 'openai' ? 'OpenAI' : 'LiteLLM'}
       </p>
     </div>
   )

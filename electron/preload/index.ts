@@ -4,6 +4,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 // Returns a cleanup function that removes the listener.
 function llmStream(
   req: {
+    provider?: string
     baseUrl: string
     apiKey: string
     body: Record<string, unknown>
@@ -34,6 +35,7 @@ function llmStream(
 }
 
 function llmFetch(req: {
+  provider?: string
   baseUrl: string
   apiKey: string
   body: Record<string, unknown>
