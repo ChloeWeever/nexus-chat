@@ -100,6 +100,7 @@ export interface ToolUseInfo {
   sublabel?: string     // secondary info, e.g. "5 results"
   error?: string
   isPending?: boolean
+  code?: string         // source code, set for run_code tool calls
 }
 
 export interface Skill {
@@ -163,6 +164,7 @@ export interface ChatConfig {
   streamingEnabled: boolean
   webSearchEnabled: boolean
   ollamaApiKey: string
+  codeExecutionEnabled: boolean
 }
 
 export interface AppSettings {
@@ -228,6 +230,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
     streamingEnabled: true,
     webSearchEnabled: false,
-    ollamaApiKey: ''
+    ollamaApiKey: '',
+    codeExecutionEnabled: false
   }
 }

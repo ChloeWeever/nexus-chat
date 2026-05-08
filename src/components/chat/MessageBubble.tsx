@@ -3,7 +3,7 @@ import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { Copy, Check, User, Bot, AlertTriangle, Globe, Puzzle, Code, RotateCcw, Loader2 } from 'lucide-react'
+import { Copy, Check, User, Bot, AlertTriangle, Globe, Puzzle, Code, RotateCcw, Loader2, Terminal, ChevronDown } from 'lucide-react'
 import { useState, useRef } from 'react'
 import type { Message, TextBlock, ToolUseInfo } from '@/types'
 import { cn, formatTime } from '@/lib/utils'
@@ -239,35 +239,73 @@ function MarkdownContent({ content, isDark }: { content: string; isDark: boolean
 }
 
 function ToolUseBadges({ toolUse, isStreaming }: { toolUse: ToolUseInfo[]; isStreaming: boolean }) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  const toggle = (id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const expandedItems = toolUse.filter((t) => t.code && expanded.has(t.toolCallId))
+
   return (
-    <div className="flex flex-wrap gap-1.5 mb-2.5 pb-2.5 border-b border-border/40">
-      {toolUse.map((t) => {
-        const isWeb = t.toolName === 'web_search'
-        const isPending = t.isPending || (isStreaming && !t.sublabel)
-        return (
-          <div
-            key={t.toolCallId}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs',
-              t.error
-                ? 'bg-destructive/10 text-destructive border border-destructive/20'
-                : 'bg-primary/8 text-primary border border-primary/20'
-            )}
-          >
-            {isWeb ? (
-              <Globe className={cn('h-3 w-3 shrink-0', isPending && 'animate-pulse')} />
-            ) : (
-              <Puzzle className={cn('h-3 w-3 shrink-0', isPending && 'animate-pulse')} />
-            )}
-            <span className="font-medium truncate max-w-[200px]">{t.label}</span>
-            {t.error ? (
-              <span className="opacity-70">failed</span>
-            ) : t.sublabel ? (
-              <span className="opacity-70">{t.sublabel}</span>
-            ) : null}
-          </div>
-        )
-      })}
+    <div className="mb-2.5 pb-2.5 border-b border-border/40">
+      <div className="flex flex-wrap gap-1.5">
+        {toolUse.map((t) => {
+          const isWeb = t.toolName === 'web_search'
+          const isCode = t.toolName === 'run_code'
+          const isPending = t.isPending || (isStreaming && !t.sublabel)
+          const isExpanded = expanded.has(t.toolCallId)
+          return (
+            <div
+              key={t.toolCallId}
+              onClick={isCode && t.code ? () => toggle(t.toolCallId) : undefined}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs',
+                t.error
+                  ? 'bg-destructive/10 text-destructive border border-destructive/20'
+                  : 'bg-primary/8 text-primary border border-primary/20',
+                isCode && t.code && 'cursor-pointer hover:bg-primary/15 transition-colors select-none'
+              )}
+            >
+              {isWeb ? (
+                <Globe className={cn('h-3 w-3 shrink-0', isPending && 'animate-pulse')} />
+              ) : isCode ? (
+                <Terminal className={cn('h-3 w-3 shrink-0', isPending && 'animate-pulse')} />
+              ) : (
+                <Puzzle className={cn('h-3 w-3 shrink-0', isPending && 'animate-pulse')} />
+              )}
+              <span className="font-medium truncate max-w-[200px]">{t.label}</span>
+              {t.error ? (
+                <span className="opacity-70">failed</span>
+              ) : t.sublabel ? (
+                <span className="opacity-70">{t.sublabel}</span>
+              ) : null}
+              {isCode && t.code && (
+                <ChevronDown
+                  className={cn('h-3 w-3 shrink-0 transition-transform', isExpanded && 'rotate-180')}
+                />
+              )}
+            </div>
+          )
+        })}
+      </div>
+      {expandedItems.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {expandedItems.map((t) => (
+            <pre
+              key={t.toolCallId}
+              className="text-xs font-mono bg-muted/50 border border-border/60 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap text-foreground/80"
+            >
+              {t.code}
+            </pre>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

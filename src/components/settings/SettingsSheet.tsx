@@ -13,7 +13,8 @@ import {
   Check,
   ExternalLink,
   RotateCcw,
-  Puzzle
+  Puzzle,
+  Terminal
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { DEFAULT_SETTINGS } from '@/types'
@@ -118,7 +119,7 @@ export default function SettingsSheet({ open, onClose }: SettingsSheetProps): JS
                 { id: 'api', label: 'Provider', icon: <Cpu className="h-3.5 w-3.5" /> },
                 { id: 'model', label: 'Model', icon: <Bot className="h-3.5 w-3.5" /> },
                 { id: 'skills', label: 'Skills', icon: <Puzzle className="h-3.5 w-3.5" /> },
-                { id: 'websearch', label: 'Web Search', icon: <Globe className="h-3.5 w-3.5" /> },
+                { id: 'tools', label: 'Tools', icon: <Terminal className="h-3.5 w-3.5" /> },
                 { id: 'appearance', label: 'Appearance', icon: <Palette className="h-3.5 w-3.5" /> }
               ].map((t) => (
                 <Tabs.Trigger
@@ -345,8 +346,29 @@ export default function SettingsSheet({ open, onClose }: SettingsSheetProps): JS
                 </Section>
               </Tabs.Content>
 
-              {/* Web Search */}
-              <Tabs.Content value="websearch" className="space-y-6">
+              {/* Tools (Web Search + Code Execution) */}
+              <Tabs.Content value="tools" className="space-y-6">
+                <Section title="Code Execution">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <Label>Enable JavaScript Execution</Label>
+                      <Hint>
+                        Allow the AI to run JavaScript code for calculations, data processing, and logic verification.
+                        Code runs in an isolated Node.js vm sandbox — no file system or network access.
+                      </Hint>
+                    </div>
+                    <Switch.Root
+                      checked={settings.chat.codeExecutionEnabled}
+                      onCheckedChange={(v) =>
+                        updateSettings({ chat: { ...settings.chat, codeExecutionEnabled: v } })
+                      }
+                      className="h-5 w-9 rounded-full bg-muted data-[state=checked]:bg-primary transition-colors shrink-0 mt-1"
+                    >
+                      <Switch.Thumb className="block h-4 w-4 rounded-full bg-white shadow-sm transition-transform data-[state=checked]:translate-x-4 translate-x-0.5" />
+                    </Switch.Root>
+                  </div>
+                </Section>
+
                 <Section title="Ollama Web Search">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
@@ -403,10 +425,10 @@ export default function SettingsSheet({ open, onClose }: SettingsSheetProps): JS
                   <div className="rounded-xl bg-muted/30 border border-border/50 p-4 space-y-2">
                     {[
                       'You send a message',
-                      'AI decides whether a web search is needed',
-                      'If yes, it searches via Ollama\'s Web Search API',
+                      'AI decides whether a tool is needed',
+                      'It may run code or search the web',
                       'Results are injected as context',
-                      'AI generates a grounded, up-to-date answer'
+                      'AI generates a grounded, accurate answer'
                     ].map((step, i) => (
                       <div key={i} className="flex items-start gap-2.5">
                         <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[10px] font-bold text-primary mt-0.5">

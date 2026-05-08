@@ -1,9 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { Send, Square, Globe, Puzzle, Paperclip, X, FileText, Loader2, AlertCircle } from 'lucide-react'
+import { Send, Square, Globe, Puzzle, Paperclip, X, FileText, Loader2, AlertCircle, Terminal } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn, generateId } from '@/lib/utils'
 import {
   WEB_SEARCH_TOOL,
+  RUN_CODE_TOOL,
   buildUseSkillTool,
   buildSkillsSystemMessage,
   type OpenAIMessage,
@@ -356,10 +357,12 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
     setIsStreaming(true)
 
     const webSearchEnabled = settings.chat.webSearchEnabled && !!settings.chat.ollamaApiKey
+    const codeExecutionEnabled = settings.chat.codeExecutionEnabled
 
     // ── Agentic tool loop (OpenAI/LiteLLM only) ──────────────────────────────
     const tools = [
       ...(webSearchEnabled ? [WEB_SEARCH_TOOL] : []),
+      ...(codeExecutionEnabled ? [RUN_CODE_TOOL] : []),
       ...(!explicitSkill && autoSkills.length > 0
         ? [buildUseSkillTool(autoSkills.map((s) => s.name))]
         : [])
@@ -447,6 +450,29 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
             label: query,
             sublabel,
             error: searchResult.error
+          })
+        } else if (call.function.name === 'run_code') {
+          const code = String(args.code ?? '')
+          setMessageStatus(conversationId, assistantMsgId, 'Running code…')
+
+          const result = await window.api.runJS({ code })
+
+          let toolContent: string
+          if (!result.output && result.error) {
+            toolContent = `Error: ${result.error}`
+          } else {
+            toolContent = result.output ?? '(no output)'
+            if (result.error) toolContent += `\nError: ${result.error}`
+          }
+
+          toolCallResults.push({ role: 'tool', tool_call_id: call.id, content: toolContent })
+          toolUseInfo.push({
+            toolCallId: call.id,
+            toolName: 'run_code',
+            label: code.split('\n')[0].slice(0, 60) || 'code',
+            sublabel: result.error ? 'error' : 'done',
+            error: result.error,
+            code
           })
         } else if (call.function.name === 'use_skill') {
           const skillName = String(args.skill_name ?? '')
@@ -549,18 +575,25 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
   const slashCmd = input.startsWith('/') && input.includes(' ') ? parseSlashCommand(input) : null
   const activeSkill = slashCmd ? skills.find((s) => s.name === slashCmd.name && s.enabled) : null
   const webSearchActive = settings.chat.webSearchEnabled && !!settings.chat.ollamaApiKey
+  const codeActive = settings.chat.codeExecutionEnabled
   const autoSkillCount = skills.filter((s) => s.enabled && !s.disableModelInvocation).length
   const isParsing = attachedFiles.some((f) => f.parsing)
   const canSend = !!(input.trim() || attachedFiles.length > 0) && !isParsing
 
   return (
     <div className="px-4 pb-4 pt-2 shrink-0">
-      {(webSearchActive || activeSkill || autoSkillCount > 0) && (
+      {(webSearchActive || codeActive || activeSkill || autoSkillCount > 0) && (
         <div className="flex items-center gap-3 mb-2 px-1">
           {webSearchActive && (
             <div className="flex items-center gap-1.5">
               <Globe className="h-3 w-3 text-primary" />
               <span className="text-[11px] text-primary font-medium">Web search</span>
+            </div>
+          )}
+          {codeActive && (
+            <div className="flex items-center gap-1.5">
+              <Terminal className="h-3 w-3 text-primary" />
+              <span className="text-[11px] text-primary font-medium">Code execution</span>
             </div>
           )}
           {activeSkill ? (

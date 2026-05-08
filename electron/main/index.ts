@@ -1,6 +1,7 @@
 import { app, shell, BrowserWindow, ipcMain, net, dialog } from 'electron'
 import { join } from 'path'
 import { readFileSync } from 'fs'
+import { Worker } from 'worker_threads'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { PDFParse } from 'pdf-parse'
 import mammoth from 'mammoth'
@@ -457,6 +458,70 @@ ipcMain.handle('chat:parse-file', async (_event, { name, buffer }: { name: strin
   } catch (err) {
     return { error: String(err) }
   }
+})
+
+// ─── JS Code Execution (Node vm in worker thread) ───────────────────────────
+
+ipcMain.handle('code:run-js', async (_event, { code }: { code: string }) => {
+  const TIMEOUT_MS = 10_000
+  return new Promise<{ output?: string; error?: string }>((resolve) => {
+    const workerSrc = `
+const { workerData, parentPort } = require('worker_threads')
+const vm = require('vm')
+const lines = []
+const fmt = (x) => {
+  if (x === null) return 'null'
+  if (x === undefined) return 'undefined'
+  if (typeof x === 'object') { try { return JSON.stringify(x, null, 2) } catch { return String(x) } }
+  return String(x)
+}
+const sandbox = {
+  console: {
+    log: (...a) => lines.push(a.map(fmt).join(' ')),
+    error: (...a) => lines.push('[stderr] ' + a.map(fmt).join(' ')),
+    warn: (...a) => lines.push('[warn] ' + a.map(fmt).join(' ')),
+    info: (...a) => lines.push(a.map(fmt).join(' ')),
+  },
+  Math, JSON, Array, Object, String, Number, Boolean, Date, RegExp, Error,
+  TypeError, RangeError, SyntaxError, Map, Set, WeakMap, WeakSet, Symbol, BigInt,
+  parseInt, parseFloat, isNaN, isFinite, Infinity, NaN,
+  encodeURIComponent, decodeURIComponent,
+}
+try {
+  const result = vm.runInNewContext(workerData.code, sandbox, { timeout: 9000 })
+  if (result !== undefined) lines.push(fmt(result))
+  parentPort.postMessage({ output: lines.join('\\n') })
+} catch (err) {
+  parentPort.postMessage({ output: lines.join('\\n'), error: err.message })
+}
+`
+    let resolved = false
+    const worker = new Worker(workerSrc, { eval: true, workerData: { code } })
+
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true
+        worker.terminate()
+        resolve({ error: `Timed out after ${TIMEOUT_MS / 1000}s` })
+      }
+    }, TIMEOUT_MS)
+
+    worker.on('message', (msg: { output?: string; error?: string }) => {
+      if (!resolved) {
+        resolved = true
+        clearTimeout(timer)
+        resolve(msg)
+      }
+    })
+
+    worker.on('error', (err: Error) => {
+      if (!resolved) {
+        resolved = true
+        clearTimeout(timer)
+        resolve({ error: err.message })
+      }
+    })
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────────────────

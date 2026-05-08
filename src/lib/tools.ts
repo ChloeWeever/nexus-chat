@@ -24,6 +24,25 @@ export const WEB_SEARCH_TOOL = {
   }
 }
 
+export const RUN_CODE_TOOL = {
+  type: 'function' as const,
+  function: {
+    name: 'run_code',
+    description:
+      'Execute JavaScript code and capture its output. Use this to perform calculations, transform data, solve math problems, generate formatted output, or verify logic. Use console.log() to print results.',
+    parameters: {
+      type: 'object',
+      properties: {
+        code: {
+          type: 'string',
+          description: 'JavaScript code to execute. Use console.log() to print results. No require() or file system access available.'
+        }
+      },
+      required: ['code']
+    }
+  }
+}
+
 // Build a `use_skill` tool whose enum is the list of invocable skill names.
 // The agent calls this to load a skill's full instructions on demand.
 export function buildUseSkillTool(skillNames: string[]) {
