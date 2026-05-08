@@ -1,5 +1,5 @@
+import { Card, CardHeader, FlexBox, FlexBoxDirection, FlexBoxJustifyContent, ProgressIndicator, Text } from '@ui5/webcomponents-react'
 import type { ProgressData } from '@/types'
-import { cn } from '@/lib/utils'
 
 interface ProgressCardProps {
   title?: string
@@ -7,41 +7,47 @@ interface ProgressCardProps {
   className?: string
 }
 
-export default function ProgressCard({ title, data, className }: ProgressCardProps): JSX.Element {
-  return (
-    <div className={cn('bg-card', className)}>
-      {title && (
-        <div className="px-5 py-3 border-b border-border/60">
-          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        </div>
-      )}
-      <div className="px-5 py-4 flex flex-col gap-4">
-        {data.items.map((item, i) => {
-          const max = item.max ?? 100
-          const pct = Math.min(100, Math.max(0, (item.value / max) * 100))
-          const color = item.color ?? 'hsl(var(--primary))'
+function pctToState(pct: number): 'Positive' | 'Information' | 'Warning' | 'Critical' {
+  if (pct >= 80) return 'Positive'
+  if (pct >= 50) return 'Information'
+  if (pct >= 30) return 'Warning'
+  return 'Critical'
+}
 
-          return (
-            <div key={i} className="flex flex-col gap-1.5">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-foreground">{item.label}</span>
-                <span className="text-sm tabular-nums text-muted-foreground">
-                  {item.max ? `${item.value}/${item.max}` : `${Math.round(pct)}%`}
-                </span>
-              </div>
-              <div className="h-2 w-full rounded-full bg-muted/50 overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-500"
-                  style={{
-                    width: `${pct}%`,
-                    background: color
-                  }}
-                />
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
+export default function ProgressCard({ title, data, className }: ProgressCardProps): JSX.Element {
+  const content = (
+    <FlexBox direction={FlexBoxDirection.Column} style={{ padding: '0.75rem 1.25rem', gap: '1rem' }}>
+      {data.items.map((item, i) => {
+        const max = item.max ?? 100
+        const pct = Math.min(100, Math.max(0, Math.round((item.value / max) * 100)))
+        const label = item.max ? `${item.value}/${item.max}` : `${pct}%`
+
+        return (
+          <FlexBox key={i} direction={FlexBoxDirection.Column} style={{ gap: '0.375rem' }}>
+            <FlexBox justifyContent={FlexBoxJustifyContent.SpaceBetween}>
+              <Text style={{ fontSize: '0.875rem', fontWeight: 500 }}>{item.label}</Text>
+              <Text style={{ fontSize: '0.875rem', color: 'var(--sapContent_LabelColor)', fontVariantNumeric: 'tabular-nums' }}>
+                {label}
+              </Text>
+            </FlexBox>
+            <ProgressIndicator
+              value={pct}
+              displayValue={`${pct}%`}
+              valueState={pctToState(pct)}
+              style={{ width: '100%' }}
+            />
+          </FlexBox>
+        )
+      })}
+    </FlexBox>
   )
+
+  if (title) {
+    return (
+      <Card className={className} header={<CardHeader titleText={title} />}>
+        {content}
+      </Card>
+    )
+  }
+  return <Card className={className}>{content}</Card>
 }

@@ -14,7 +14,7 @@ interface CardRendererProps {
 }
 
 export default function CardRenderer({ block, className }: CardRendererProps): JSX.Element {
-  const wrapperClass = cn('my-3 rounded-xl overflow-hidden border border-border/60', className)
+  const wrapperClass = cn('my-3', className)
 
   switch (block.cardType) {
     case 'bar_chart':
