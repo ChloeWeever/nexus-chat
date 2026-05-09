@@ -10,6 +10,8 @@
 
 ---
 
+English · [中文](README.zh.md)
+
 ## Features
 
 - **Desktop pet** — pick an animated companion from the [Petdex](https://petdex.crafter.run) gallery (1400+ pets); the pet lives in the chat area, wanders on its own, and reacts to the AI — reviewing while thinking, running while generating, waving when done
@@ -44,10 +46,13 @@ npm run dev
 ### Build distributable
 
 ```bash
-npm run package
+npm run package          # current platform
+npm run package:win      # Windows
+npm run package:mac      # macOS
+npm run package:linux    # Linux
 ```
 
-Output: `dist/` — produces a portable executable on Windows.
+Output: `dist/`.
 
 ## Configuration
 
@@ -63,6 +68,7 @@ Open **Settings** (gear icon, bottom-left):
 | Model | Max Tokens | Response length cap |
 | Tools | Web Search | Enable + enter an Ollama API key |
 | Tools | Code Execution | Allow AI to run JavaScript snippets |
+| Tools | Animation Generation | Allow AI to generate HTML animations for visual explanations |
 | Appearance | Theme | Light / Dark / System |
 | Appearance | Desktop Pet | Pick from Petdex gallery; toggle wandering on/off |
 
@@ -94,6 +100,21 @@ The system prompt teaches the AI to render structured data using XML tags:
 ```
 
 Supported types: `bar_chart` · `line_chart` · `area_chart` · `pie_chart` · `table` · `metric` · `progress`
+
+## Animation Syntax
+
+When Animation Generation is enabled, the AI embeds `<animation>` blocks in its response to visually explain complex concepts:
+
+```xml
+<animation title="Binary Search Algorithm">
+<!DOCTYPE html>
+<html>
+  <!-- auto-playing, infinitely looping HTML/CSS/JS animation -->
+</html>
+</animation>
+```
+
+Animations render in a sandboxed iframe — fully isolated, auto-playing, no user interaction required.
 
 ## Skills
 
