@@ -1,27 +1,27 @@
-import { Sparkles, BarChart2, Table2, TrendingUp } from 'lucide-react'
+import { Mail, Lightbulb, Code2, CalendarDays } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { AppIcon } from '@/components/ui/AppIcon'
 
 const EXAMPLE_PROMPTS = [
   {
-    icon: <BarChart2 className="h-4 w-4" />,
-    label: 'Visualize sales data',
-    prompt: 'Show me a bar chart of monthly sales: Jan 1200, Feb 1800, Mar 1500, Apr 2100, May 1900, Jun 2400'
+    icon: <Mail className="h-4 w-4" />,
+    label: 'Draft a work email',
+    prompt: 'Write a professional email to postpone a meeting to next week due to a scheduling conflict. Keep it concise and polite.'
   },
   {
-    icon: <TrendingUp className="h-4 w-4" />,
-    label: 'Growth trend',
-    prompt: 'Create a line chart showing user growth over the past 6 months starting from 500 users'
+    icon: <Lightbulb className="h-4 w-4" />,
+    label: 'Explain something clearly',
+    prompt: 'Explain how large language models work in simple terms, as if I have no AI background.'
   },
   {
-    icon: <Table2 className="h-4 w-4" />,
-    label: 'Compare data in a table',
-    prompt: 'Make a comparison table of 5 programming languages with columns: name, typing, performance, use case'
+    icon: <Code2 className="h-4 w-4" />,
+    label: 'Review my code',
+    prompt: 'Review this Python function and suggest improvements for readability and performance:\n\ndef get_duplicates(lst):\n    seen = []\n    dups = []\n    for x in lst:\n        if x in seen: dups.append(x)\n        seen.append(x)\n    return dups'
   },
   {
-    icon: <Sparkles className="h-4 w-4" />,
-    label: 'Key metrics dashboard',
-    prompt: 'Show key SaaS metrics: MRR $45K (+12%), Churn 2.3% (-0.5%), NPS 68 (+5), Active users 1240 (+8%)'
+    icon: <CalendarDays className="h-4 w-4" />,
+    label: 'Make a learning plan',
+    prompt: 'Create a 30-day plan to learn TypeScript, assuming I already know JavaScript. Include daily topics and mini-projects.'
   }
 ]
 
