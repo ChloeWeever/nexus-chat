@@ -8,6 +8,9 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "package": "electron-vite build && electron-builder",
+    "package:win": "electron-vite build && electron-builder --win",
+    "package:mac": "electron-vite build && electron-builder --mac",
+    "package:linux": "electron-vite build && electron-builder --linux",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
@@ -75,8 +78,26 @@
       "icon": "resources/icon.png"
     },
     "mac": {
-      "target": "dmg",
-      "icon": "resources/icon.png"
+      "category": "public.app-category.productivity",
+      "icon": "resources/icon.png",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] },
+        { "target": "zip", "arch": ["x64", "arm64"] }
+      ]
+    },
+    "dmg": {
+      "title": "${productName} ${version}",
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
+    },
+    "linux": {
+      "category": "Network",
+      "icon": "resources/icon.png",
+      "target": ["AppImage", "deb"]
     }
   }
 }
