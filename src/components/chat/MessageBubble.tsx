@@ -263,7 +263,7 @@ function AnimationBlockRenderer({ block }: { block: AnimationBlock }) {
       {blobUrl && (
         <iframe
           src={blobUrl}
-          sandbox="allow-scripts allow-same-origin"
+          sandbox="allow-scripts"
           className="w-full border-none bg-black"
           style={{ height: '360px' }}
           title={block.title ?? 'Animation'}
