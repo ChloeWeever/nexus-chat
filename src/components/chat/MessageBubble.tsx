@@ -4,7 +4,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { Copy, Check, User, Bot, AlertTriangle, Globe, Puzzle, Code, RotateCcw, Loader2, Terminal, ChevronDown, Film } from 'lucide-react'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import type { Message, TextBlock, AnimationBlock, ToolUseInfo } from '@/types'
 import { cn, formatTime } from '@/lib/utils'
 import CardRenderer from '@/components/cards/CardRenderer'
@@ -239,6 +239,19 @@ function MarkdownContent({ content, isDark }: { content: string; isDark: boolean
 }
 
 function AnimationBlockRenderer({ block }: { block: AnimationBlock }) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Use a Blob URL instead of srcdoc so the iframe gets a real blob: origin.
+    // With allow-same-origin, the blob origin is isolated from the parent app
+    // origin, preventing cross-frame localStorage / DOM access while still
+    // letting Chromium's compositor run CSS animations and JS timers normally.
+    const blob = new Blob([block.html], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    setBlobUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [block.html])
+
   return (
     <div className="rounded-xl overflow-hidden border border-border/60 my-1">
       {block.title && (
@@ -247,13 +260,15 @@ function AnimationBlockRenderer({ block }: { block: AnimationBlock }) {
           <span className="text-xs font-medium text-foreground/80">{block.title}</span>
         </div>
       )}
-      <iframe
-        srcDoc={block.html}
-        sandbox="allow-scripts"
-        className="w-full border-none bg-black"
-        style={{ height: '360px' }}
-        title={block.title ?? 'Animation'}
-      />
+      {blobUrl && (
+        <iframe
+          src={blobUrl}
+          sandbox="allow-scripts allow-same-origin"
+          className="w-full border-none bg-black"
+          style={{ height: '360px' }}
+          title={block.title ?? 'Animation'}
+        />
+      )}
     </div>
   )
 }

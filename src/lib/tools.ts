@@ -55,24 +55,27 @@ When explaining a concept that benefits from visual animation — algorithms, da
 <head>
 <meta charset="utf-8">
 <style>
-  body { margin: 0; background: #0f0f1a; color: #e2e8f0; font-family: system-ui, sans-serif; overflow: hidden; }
-  /* Define @keyframes and CSS animations here */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { width: 680px; height: 360px; overflow: hidden; background: #0f0f1a; color: #e2e8f0; font-family: system-ui, sans-serif; }
 </style>
 </head>
 <body>
-  <!-- Animated SVG, canvas, or DOM elements with labels -->
-  <script>
-    // Vanilla JS only: requestAnimationFrame, setInterval, setTimeout
-    // No external scripts, no CDN, no import/require
-  </script>
+<!-- your animated content -->
+<script>
+// use requestAnimationFrame or setInterval for JS-driven animation
+// use CSS @keyframes with animation-iteration-count:infinite for CSS animation
+// NO external scripts — everything must be inline
+</script>
 </body>
 </html>
 </animation>
 
-Rules:
-- Use ONLY inline CSS (@keyframes, transitions) and vanilla JavaScript — no <script src="..."> or CDN imports
-- Target 680 × 360 px; dark background preferred
-- Include a visible title and clear step-by-step labels inside the animation
+Important rules:
+- ONLY inline CSS and vanilla JavaScript — absolutely no <script src="...">, no CDN, no imports
+- Set body to exactly 680×360 px with overflow:hidden
+- CSS animations MUST include animation-iteration-count or loop manually — a one-shot animation looks broken
+- Use requestAnimationFrame loops or setInterval for JavaScript-driven animation
+- Dark background (#0f0f1a or similar); include a visible title and step labels inside the animation
 - Place the <animation> block before your text explanation`
 
 
