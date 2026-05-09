@@ -60,21 +60,23 @@ body { width: 680px; height: 360px; overflow: hidden; background: #0f0f1a; color
 </style>
 </head>
 <body>
-<!-- your animated content -->
+<!-- animated content -->
 <script>
-// use requestAnimationFrame or setInterval for JS-driven animation
-// use CSS @keyframes with animation-iteration-count:infinite for CSS animation
-// NO external scripts — everything must be inline
+// Animation starts automatically on load — no user interaction required
+// For JS-driven: use a requestAnimationFrame loop or setInterval that runs forever
+// For CSS-driven: use animation-iteration-count: infinite
 </script>
 </body>
 </html>
 </animation>
 
-Important rules:
-- ONLY inline CSS and vanilla JavaScript — absolutely no <script src="...">, no CDN, no imports
-- Set body to exactly 680×360 px with overflow:hidden
-- CSS animations MUST include animation-iteration-count or loop manually — a one-shot animation looks broken
-- Use requestAnimationFrame loops or setInterval for JavaScript-driven animation
+Strict rules — violations will break the animation:
+- The animation MUST start automatically when the page loads — no buttons, no click-to-play, no user interaction of any kind
+- The animation MUST loop infinitely — never play once and stop
+  - CSS: always set animation-iteration-count: infinite
+  - JS: keep the requestAnimationFrame / setInterval loop running forever; never call clearInterval or cancelAnimationFrame
+- ONLY inline CSS and vanilla JavaScript — no <script src="...">, no CDN, no imports
+- Set body to exactly 680×360 px with overflow: hidden
 - Dark background (#0f0f1a or similar); include a visible title and step labels inside the animation
 - Place the <animation> block before your text explanation`
 
