@@ -91,7 +91,13 @@ export interface TextBlock {
   content: string
 }
 
-export type ContentBlock = TextBlock | CardBlock
+export interface AnimationBlock {
+  type: 'animation'
+  title?: string
+  html: string
+}
+
+export type ContentBlock = TextBlock | CardBlock | AnimationBlock
 
 export interface ToolUseInfo {
   toolCallId: string
@@ -101,8 +107,6 @@ export interface ToolUseInfo {
   error?: string
   isPending?: boolean
   code?: string         // source code, set for run_code tool calls
-  animationHtml?: string   // full HTML, set for generate_animation tool calls
-  animationTitle?: string  // display title for the animation iframe
 }
 
 export interface Skill {

@@ -5,7 +5,7 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { Copy, Check, User, Bot, AlertTriangle, Globe, Puzzle, Code, RotateCcw, Loader2, Terminal, ChevronDown, Film } from 'lucide-react'
 import { useState, useRef } from 'react'
-import type { Message, TextBlock, ToolUseInfo } from '@/types'
+import type { Message, TextBlock, AnimationBlock, ToolUseInfo } from '@/types'
 import { cn, formatTime } from '@/lib/utils'
 import CardRenderer from '@/components/cards/CardRenderer'
 import { useAppStore } from '@/store'
@@ -238,6 +238,26 @@ function MarkdownContent({ content, isDark }: { content: string; isDark: boolean
   )
 }
 
+function AnimationBlockRenderer({ block }: { block: AnimationBlock }) {
+  return (
+    <div className="rounded-xl overflow-hidden border border-border/60 my-1">
+      {block.title && (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/40 border-b border-border/40">
+          <Film className="h-3.5 w-3.5 text-primary/70 shrink-0" />
+          <span className="text-xs font-medium text-foreground/80">{block.title}</span>
+        </div>
+      )}
+      <iframe
+        srcDoc={block.html}
+        sandbox="allow-scripts"
+        className="w-full border-none bg-black"
+        style={{ height: '360px' }}
+        title={block.title ?? 'Animation'}
+      />
+    </div>
+  )
+}
+
 function ToolUseBadges({ toolUse, isStreaming }: { toolUse: ToolUseInfo[]; isStreaming: boolean }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
@@ -251,7 +271,6 @@ function ToolUseBadges({ toolUse, isStreaming }: { toolUse: ToolUseInfo[]; isStr
   }
 
   const expandedItems = toolUse.filter((t) => t.code && expanded.has(t.toolCallId))
-  const animationItems = toolUse.filter((t) => t.animationHtml)
 
   return (
     <div className="mb-2.5 pb-2.5 border-b border-border/40">
@@ -259,7 +278,6 @@ function ToolUseBadges({ toolUse, isStreaming }: { toolUse: ToolUseInfo[]; isStr
         {toolUse.map((t) => {
           const isWeb = t.toolName === 'web_search'
           const isCode = t.toolName === 'run_code'
-          const isAnim = t.toolName === 'generate_animation'
           const isPending = t.isPending || (isStreaming && !t.sublabel)
           const isExpanded = expanded.has(t.toolCallId)
           return (
@@ -278,8 +296,6 @@ function ToolUseBadges({ toolUse, isStreaming }: { toolUse: ToolUseInfo[]; isStr
                 <Globe className={cn('h-3 w-3 shrink-0', isPending && 'animate-pulse')} />
               ) : isCode ? (
                 <Terminal className={cn('h-3 w-3 shrink-0', isPending && 'animate-pulse')} />
-              ) : isAnim ? (
-                <Film className={cn('h-3 w-3 shrink-0', isPending && 'animate-pulse')} />
               ) : (
                 <Puzzle className={cn('h-3 w-3 shrink-0', isPending && 'animate-pulse')} />
               )}
@@ -307,25 +323,6 @@ function ToolUseBadges({ toolUse, isStreaming }: { toolUse: ToolUseInfo[]; isStr
             >
               {t.code}
             </pre>
-          ))}
-        </div>
-      )}
-      {animationItems.length > 0 && (
-        <div className="mt-3 space-y-3">
-          {animationItems.map((t) => (
-            <div key={t.toolCallId} className="rounded-xl overflow-hidden border border-border/60">
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/40 border-b border-border/40">
-                <Film className="h-3.5 w-3.5 text-primary/70 shrink-0" />
-                <span className="text-xs font-medium text-foreground/80">{t.animationTitle}</span>
-              </div>
-              <iframe
-                srcDoc={t.animationHtml}
-                sandbox="allow-scripts"
-                className="w-full border-none bg-black"
-                style={{ height: '360px' }}
-                title={t.animationTitle}
-              />
-            </div>
           ))}
         </div>
       )}
@@ -424,7 +421,7 @@ export default function MessageBubble({ message, onRegenerate }: MessageBubblePr
                   </p>
                 )}
 
-                {/* Finalized: render blocks (markdown + cards) */}
+                {/* Finalized: render blocks (markdown + cards + animations) */}
                 {!message.isStreaming && message.blocks && (
                   <div ref={contentRef} className="flex flex-col gap-1">
                     {message.blocks.map((block, i) => {
@@ -437,6 +434,9 @@ export default function MessageBubble({ message, onRegenerate }: MessageBubblePr
                             isDark={isDark}
                           />
                         ) : null
+                      }
+                      if (block.type === 'animation') {
+                        return <AnimationBlockRenderer key={i} block={block as AnimationBlock} />
                       }
                       return <CardRenderer key={i} block={block} />
                     })}

@@ -43,39 +43,40 @@ export const RUN_CODE_TOOL = {
   }
 }
 
-export const GENERATE_ANIMATION_TOOL = {
-  type: 'function' as const,
-  function: {
-    name: 'generate_animation',
-    description:
-      'Create a self-contained animated HTML visualization to explain a concept visually. ' +
-      'Use this whenever an animation would genuinely help the user understand something: ' +
-      'algorithms, data structures, network protocols, physics, math, biological processes, ' +
-      'step-by-step workflows, etc. Always add clear labels and narration text inside the animation. ' +
-      'Prefer a dark background. You may load GSAP from ' +
-      'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js for complex motion.',
-    parameters: {
-      type: 'object',
-      properties: {
-        title: {
-          type: 'string',
-          description: 'Short descriptive title, e.g. "How TCP Three-Way Handshake Works"'
-        },
-        html: {
-          type: 'string',
-          description:
-            'Complete self-contained HTML document with all CSS and JavaScript inline. ' +
-            'Will be rendered in a sandboxed iframe (allow-scripts only, no network from sandbox). ' +
-            'External scripts must be loaded via <script src="..."> inside the HTML. ' +
-            'Target 16:9 aspect ratio, designed for ~680×360 px.'
-        }
-      },
-      required: ['title', 'html']
-    }
-  }
-}
+// System message injected when animation generation is enabled.
+// Teaches the LLM to embed <animation> XML tags using inline-only HTML/CSS/JS.
+export const ANIMATION_SYSTEM_MESSAGE = `## Animated Explanations
+
+When explaining a concept that benefits from visual animation — algorithms, data structures, network protocols, sorting, math, physics, step-by-step processes — embed a self-contained HTML animation using this syntax:
+
+<animation title="Short descriptive title">
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; background: #0f0f1a; color: #e2e8f0; font-family: system-ui, sans-serif; overflow: hidden; }
+  /* Define @keyframes and CSS animations here */
+</style>
+</head>
+<body>
+  <!-- Animated SVG, canvas, or DOM elements with labels -->
+  <script>
+    // Vanilla JS only: requestAnimationFrame, setInterval, setTimeout
+    // No external scripts, no CDN, no import/require
+  </script>
+</body>
+</html>
+</animation>
+
+Rules:
+- Use ONLY inline CSS (@keyframes, transitions) and vanilla JavaScript — no <script src="..."> or CDN imports
+- Target 680 × 360 px; dark background preferred
+- Include a visible title and clear step-by-step labels inside the animation
+- Place the <animation> block before your text explanation`
 
 
+// Build a `use_skill` tool whose enum is the list of invocable skill names.
 // The agent calls this to load a skill's full instructions on demand.
 export function buildUseSkillTool(skillNames: string[]) {
   return {

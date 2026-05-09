@@ -1,6 +1,7 @@
-import type { CardType, ContentBlock, CardData } from '@/types'
+import type { CardType, ContentBlock, CardData, AnimationBlock } from '@/types'
 
 const CARD_PATTERN = /<card\s+([^>]+)>([\s\S]*?)<\/card>/g
+const ANIM_PATTERN = /<animation(?:\s+([^>]*?))?>([\s\S]*?)<\/animation>/g
 
 function parseAttributes(attrString: string): Record<string, string> {
   const attrs: Record<string, string> = {}
@@ -13,51 +14,61 @@ function parseAttributes(attrString: string): Record<string, string> {
   return attrs
 }
 
+interface RawBlock {
+  index: number
+  length: number
+  block: ContentBlock
+}
+
 export function parseContentBlocks(text: string): ContentBlock[] {
+  const raw: RawBlock[] = []
+
+  // Collect <card> blocks
+  CARD_PATTERN.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = CARD_PATTERN.exec(text)) !== null) {
+    try {
+      const attrs = parseAttributes(m[1])
+      const data = JSON.parse(m[2].trim()) as CardData
+      raw.push({
+        index: m.index,
+        length: m[0].length,
+        block: { type: 'card', cardType: attrs.type as CardType, title: attrs.title, data }
+      })
+    } catch {
+      // fall through: leave unparseable card as text
+    }
+  }
+
+  // Collect <animation> blocks
+  ANIM_PATTERN.lastIndex = 0
+  while ((m = ANIM_PATTERN.exec(text)) !== null) {
+    const attrs = m[1] ? parseAttributes(m[1]) : {}
+    const block: AnimationBlock = { type: 'animation', html: m[2], title: attrs.title }
+    raw.push({ index: m.index, length: m[0].length, block })
+  }
+
+  // Sort all blocks by position in the source text
+  raw.sort((a, b) => a.index - b.index)
+
+  // Interleave with text segments between blocks
   const blocks: ContentBlock[] = []
   let lastIndex = 0
 
-  CARD_PATTERN.lastIndex = 0
-  let match: RegExpExecArray | null
-
-  while ((match = CARD_PATTERN.exec(text)) !== null) {
-    // Text before this card
-    if (match.index > lastIndex) {
-      const textContent = text.slice(lastIndex, match.index).trim()
-      if (textContent) {
-        blocks.push({ type: 'text', content: textContent })
-      }
+  for (const r of raw) {
+    if (r.index > lastIndex) {
+      const txt = text.slice(lastIndex, r.index).trim()
+      if (txt) blocks.push({ type: 'text', content: txt })
     }
-
-    // Parse the card
-    try {
-      const attrs = parseAttributes(match[1])
-      const rawJson = match[2].trim()
-      const data = JSON.parse(rawJson) as CardData
-
-      blocks.push({
-        type: 'card',
-        cardType: attrs.type as CardType,
-        title: attrs.title,
-        data
-      })
-    } catch {
-      // If parsing fails, treat as text
-      blocks.push({ type: 'text', content: match[0] })
-    }
-
-    lastIndex = match.index + match[0].length
+    blocks.push(r.block)
+    lastIndex = r.index + r.length
   }
 
-  // Remaining text after last card
   if (lastIndex < text.length) {
-    const textContent = text.slice(lastIndex).trim()
-    if (textContent) {
-      blocks.push({ type: 'text', content: textContent })
-    }
+    const txt = text.slice(lastIndex).trim()
+    if (txt) blocks.push({ type: 'text', content: txt })
   }
 
-  // If no blocks were created, return the full text as a single text block
   if (blocks.length === 0) {
     return [{ type: 'text', content: text }]
   }
@@ -67,5 +78,6 @@ export function parseContentBlocks(text: string): ContentBlock[] {
 
 export function hasCards(text: string): boolean {
   CARD_PATTERN.lastIndex = 0
-  return CARD_PATTERN.test(text)
+  ANIM_PATTERN.lastIndex = 0
+  return CARD_PATTERN.test(text) || ANIM_PATTERN.test(text)
 }

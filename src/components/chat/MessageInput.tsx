@@ -5,7 +5,7 @@ import { cn, generateId } from '@/lib/utils'
 import {
   WEB_SEARCH_TOOL,
   RUN_CODE_TOOL,
-  GENERATE_ANIMATION_TOOL,
+  ANIMATION_SYSTEM_MESSAGE,
   buildUseSkillTool,
   buildSkillsSystemMessage,
   type OpenAIMessage,
@@ -350,6 +350,10 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
       systemMsgs.push({ role: 'system', content: buildSkillsSystemMessage(autoSkills) })
     }
 
+    if (settings.chat.animationEnabled) {
+      systemMsgs.push({ role: 'system', content: ANIMATION_SYSTEM_MESSAGE })
+    }
+
     const historyMessages = conversation.messages
       .filter((m) => m.role !== 'system' && m.content.trim() !== '' && !m.error)
       .map((m) => ({ role: m.role as OpenAIMessage['role'], content: m.content }))
@@ -371,13 +375,11 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
 
     const webSearchEnabled = settings.chat.webSearchEnabled && !!settings.chat.ollamaApiKey
     const codeExecutionEnabled = settings.chat.codeExecutionEnabled
-    const animationEnabled = settings.chat.animationEnabled
 
     // ── Agentic tool loop (OpenAI/LiteLLM only) ──────────────────────────────
     const tools = [
       ...(webSearchEnabled ? [WEB_SEARCH_TOOL] : []),
       ...(codeExecutionEnabled ? [RUN_CODE_TOOL] : []),
-      ...(animationEnabled ? [GENERATE_ANIMATION_TOOL] : []),
       ...(!explicitSkill && autoSkills.length > 0
         ? [buildUseSkillTool(autoSkills.map((s) => s.name))]
         : [])
@@ -488,24 +490,6 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
             sublabel: result.error ? 'error' : 'done',
             error: result.error,
             code
-          })
-        } else if (call.function.name === 'generate_animation') {
-          const title = String(args.title ?? 'Animation')
-          const html = String(args.html ?? '')
-          setMessageStatus(conversationId, assistantMsgId, `Generating animation…`)
-
-          toolCallResults.push({
-            role: 'tool',
-            tool_call_id: call.id,
-            content: 'Animation generated and is now displayed to the user above your response.'
-          })
-          toolUseInfo.push({
-            toolCallId: call.id,
-            toolName: 'generate_animation',
-            label: title,
-            sublabel: 'rendered',
-            animationHtml: html,
-            animationTitle: title
           })
         } else if (call.function.name === 'use_skill') {
           const skillName = String(args.skill_name ?? '')
