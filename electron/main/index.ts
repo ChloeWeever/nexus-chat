@@ -540,6 +540,29 @@ try {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+ipcMain.handle('pet:fetch-manifest', () => {
+  return new Promise<{ data?: unknown; error?: string }>((resolve) => {
+    const request = net.request({ url: 'https://petdex.crafter.run/api/manifest', method: 'GET' })
+    let body = ''
+    request.on('response', (response) => {
+      response.on('data', (chunk) => (body += chunk.toString()))
+      response.on('end', () => {
+        if (response.statusCode !== 200) {
+          resolve({ error: `HTTP ${response.statusCode}` })
+        } else {
+          try {
+            resolve({ data: JSON.parse(body) })
+          } catch {
+            resolve({ error: 'Invalid JSON' })
+          }
+        }
+      })
+    })
+    request.on('error', (err) => resolve({ error: err.message }))
+    request.end()
+  })
+})
+
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.nexus-chat.app')
 
