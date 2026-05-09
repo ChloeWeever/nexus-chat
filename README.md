@@ -12,6 +12,7 @@
 
 ## Features
 
+- **Desktop pet** — pick an animated companion from the [Petdex](https://petdex.crafter.run) gallery (1400+ pets); the pet lives in the chat area, wanders on its own, and reacts to the AI — reviewing while thinking, running while generating, waving when done
 - **Multi-provider** — LiteLLM proxy, OpenAI, or Anthropic; configure base URL, API key, model, temperature, and max tokens per session
 - **Rich visualizations** — AI renders bar, line, area, pie/donut charts, data tables, metric cards, and progress bars inline in the conversation using a simple XML card syntax
 - **File uploads** — attach images, PDFs, Word documents, Excel sheets, PowerPoint files, and plain text/code files; content is extracted and injected as context
@@ -53,6 +54,7 @@ Open **Settings** (gear icon, bottom-left):
 | Tools | Web Search | Enable + enter an Ollama API key |
 | Tools | Code Execution | Allow AI to run JavaScript snippets |
 | Appearance | Theme | Light / Dark / System |
+| Appearance | Desktop Pet | Pick from Petdex gallery; toggle wandering on/off |
 
 ## Card Syntax
 
