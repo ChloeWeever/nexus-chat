@@ -1,7 +1,7 @@
 <div align="center">
   <img src="src/assets/icon.svg" alt="Nexus Chat" width="96" />
   <h1>Nexus Chat</h1>
-  <p>AI chat desktop app with rich data visualization, powered by LiteLLM</p>
+  <p>AI chat desktop app with rich data visualization and tool use</p>
   <p>
     <a href="LICENSE">GPL-3.0 License</a>
     · Copyright (c) 2026 ChloeWeever
@@ -12,14 +12,16 @@
 
 ## Features
 
-- **Any model** — connects to any LLM via [LiteLLM](https://docs.litellm.ai/) (OpenAI, Claude, Gemini, Ollama, and more)
-- **Rich visualizations** — AI can render bar/line/area/pie charts, tables, metric cards, and progress bars inline in the conversation
-- **File uploads** — attach images, PDFs, Word docs, Excel sheets, CSVs, and plain text/code files
-- **Web search** — optional real-time search via Tavily, injected into the AI context
-- **Skills** — define custom instruction sets and invoke them with `/skill-name` slash commands
-- **Conversation history** — grouped by date, with per-conversation titles auto-generated from the first message
-- **Dark / light / system theme**
+- **Multi-provider** — LiteLLM proxy, OpenAI, or Anthropic; configure base URL, API key, model, temperature, and max tokens per session
+- **Rich visualizations** — AI renders bar, line, area, pie/donut charts, data tables, metric cards, and progress bars inline in the conversation using a simple XML card syntax
+- **File uploads** — attach images, PDFs, Word documents, Excel sheets, PowerPoint files, and plain text/code files; content is extracted and injected as context
+- **Image OCR** — paste or attach an image and the app extracts text via Tesseract.js (English + Simplified Chinese)
+- **JavaScript execution** — AI can write and run code in a sandboxed Node.js Worker thread (10 s timeout, no network/filesystem access)
+- **Web search** — optional real-time search via the [Ollama Web Search API](https://ollama.com), injected into the AI context
+- **Skills** — define reusable instruction sets as SKILL.md files and invoke them with `/skill-name` slash commands; built-in skills include `summarize`, `translate`, `explain`, `improve`, `review`, and `commit`
 - **Streaming responses** with a stop button
+- **Conversation history** — grouped by date, titles auto-generated from the first message
+- **Dark / light / system theme**
 
 ## Install & Run
 
@@ -34,21 +36,27 @@ npm run dev
 npm run package
 ```
 
-Output: `dist/` — produces an NSIS installer on Windows and a DMG on macOS.
+Output: `dist/` — produces a portable executable on Windows.
 
 ## Configuration
 
-Open **Settings** (gear icon, bottom-left) and fill in:
+Open **Settings** (gear icon, bottom-left):
 
-| Field | Description |
-|---|---|
-| Base URL | Your LiteLLM proxy URL, e.g. `http://localhost:4000` |
-| API Key | API key for the proxy (leave blank if not required) |
-| Model | Model name, e.g. `gpt-4o-mini`, `claude-3-haiku`, `ollama/llama3` |
+| Tab | Field | Description |
+|---|---|---|
+| Provider | Provider | LiteLLM / OpenAI / Anthropic |
+| Provider | Base URL | Proxy or API endpoint (leave blank for official API) |
+| Provider | API Key | Key for the chosen provider |
+| Model | Model | e.g. `gpt-4o-mini`, `claude-sonnet-4-6`, `ollama/llama3` |
+| Model | Temperature | 0 = deterministic · 2 = very creative |
+| Model | Max Tokens | Response length cap |
+| Tools | Web Search | Enable + enter an Ollama API key |
+| Tools | Code Execution | Allow AI to run JavaScript snippets |
+| Appearance | Theme | Light / Dark / System |
 
 ## Card Syntax
 
-The built-in system prompt teaches the AI to render structured data cards using XML tags:
+The system prompt teaches the AI to render structured data using XML tags:
 
 ```xml
 <card type="bar_chart" title="Monthly Revenue">
@@ -63,9 +71,9 @@ The built-in system prompt teaches the AI to render structured data cards using 
 {"metrics":[{"label":"MRR","value":"$45K","change":"+12%","trend":"up"},{"label":"Churn","value":"2.3%","change":"-0.5%","trend":"down"}]}
 </card>
 
-<card type="table" title="Language Comparison">
-{"columns":[{"key":"lang","label":"Language"},{"key":"perf","label":"Performance"},{"key":"use","label":"Use Case"}],
- "rows":[{"lang":"Rust","perf":"Excellent","use":"Systems"},{"lang":"Go","perf":"Very Good","use":"Services"}]}
+<card type="table" title="Comparison">
+{"columns":[{"key":"lang","label":"Language"},{"key":"perf","label":"Performance"}],
+ "rows":[{"lang":"Rust","perf":"Excellent"},{"lang":"Go","perf":"Very Good"}]}
 </card>
 
 <card type="progress" title="Q3 Goals">
@@ -73,12 +81,20 @@ The built-in system prompt teaches the AI to render structured data cards using 
 </card>
 ```
 
-Supported card types: `bar_chart` · `line_chart` · `area_chart` · `pie_chart` · `table` · `metric` · `progress`
+Supported types: `bar_chart` · `line_chart` · `area_chart` · `pie_chart` · `table` · `metric` · `progress`
+
+## Skills
+
+Skills are markdown files that inject a system-level instruction set into the conversation. Import a `SKILL.md` file from Settings → Skills, then invoke it with `/skill-name [argument]`.
+
+Built-in skills: `summarize` · `translate` · `explain` · `improve` · `review` · `commit`
 
 ## Tech Stack
 
 - [Electron](https://www.electronjs.org/) + [electron-vite](https://electron-vite.org/)
 - [React](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/)
-- [Tailwind CSS](https://tailwindcss.com/) + [Radix UI](https://www.radix-ui.com/)
+- [Tailwind CSS](https://tailwindcss.com/) + [Radix UI](https://www.radix-ui.com/) + [SAP UI5 Web Components](https://sap.github.io/ui5-webcomponents-react/)
 - [Recharts](https://recharts.org/) for data visualization
 - [Zustand](https://zustand-demo.pmnd.rs/) for state management
+- [Tesseract.js](https://tesseract.projectnaptha.com/) for OCR
+- [pdf-parse](https://www.npmjs.com/package/pdf-parse) · [mammoth](https://github.com/mwilliamson/mammoth.js) · [xlsx](https://sheetjs.com/) · [jszip](https://stuk.github.io/jszip/) for file parsing
