@@ -24,7 +24,17 @@
 - **Conversation history** — grouped by date, titles auto-generated from the first message
 - **Dark / light / system theme**
 
-## Install & Run
+## For User
+
+Download from [release](https://github.com/ChloeWeever/nexus-chat/releases). We have support Windows-x64, MacOS-arm64, MacOS-intel. If you are on other platfoem(Windows-arm, Linux...), please build by yourself.
+
+### Free Usage
+
+If you dont't have any LLM API or you don't want to pay for any, you can go to [Nvidia NIM APIS](https://build.nvidia.com/models) to apply for a free API endpoint. We recommend you to choose [deepseek-v4-flash](https://build.nvidia.com/deepseek-ai/deepseek-v4-flash).
+
+## For Developer
+
+### Install & Run
 
 ```bash
 npm install
