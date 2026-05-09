@@ -7,7 +7,6 @@ import '@ui5/webcomponents-react/dist/Assets.js'
 import { setTheme } from '@ui5/webcomponents-base/dist/config/Theme.js'
 
 setTheme('sap_horizon_dark')
-
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
     <ThemeProvider>

@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import Sidebar from '@/components/sidebar/Sidebar'
 import ChatWindow from '@/components/chat/ChatWindow'
 import WelcomeScreen from '@/components/chat/WelcomeScreen'
+import PetFloat from '@/components/chat/PetFloat'
 
 export default function App(): JSX.Element {
   const { settings, activeConversationId } = useAppStore()
@@ -23,8 +24,9 @@ export default function App(): JSX.Element {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">
       <Sidebar />
-      <main className="flex flex-1 flex-col overflow-hidden">
+      <main className="relative flex flex-1 flex-col overflow-hidden">
         {activeConversationId ? <ChatWindow /> : <WelcomeScreen />}
+        <PetFloat />
       </main>
     </div>
   )

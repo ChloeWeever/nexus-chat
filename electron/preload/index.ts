@@ -73,6 +73,12 @@ function ocrImage(params: { dataUrl: string }): Promise<{ text?: string; error?:
   return ipcRenderer.invoke('chat:ocr-image', params)
 }
 
+// ─── Desktop Pet ─────────────────────────────────────────────────────────────
+
+function petFetchManifest(): Promise<{ data?: unknown; error?: string }> {
+  return ipcRenderer.invoke('pet:fetch-manifest')
+}
+
 contextBridge.exposeInMainWorld('api', {
   platform: process.platform,
   llmStream,
@@ -81,5 +87,8 @@ contextBridge.exposeInMainWorld('api', {
   skillImportFile,
   parseFile,
   runJS,
-  ocrImage
+  ocrImage,
+  pet: {
+    fetchManifest: petFetchManifest,
+  }
 })

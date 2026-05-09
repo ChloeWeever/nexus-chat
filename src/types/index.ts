@@ -159,6 +159,12 @@ export interface AppearanceConfig {
   theme: 'light' | 'dark' | 'system'
 }
 
+export interface PetConfig {
+  slug: string
+  displayName: string
+  spritesheetUrl: string
+}
+
 export interface ChatConfig {
   systemPrompt: string
   streamingEnabled: boolean
@@ -171,6 +177,8 @@ export interface AppSettings {
   litellm: LiteLLMConfig
   appearance: AppearanceConfig
   chat: ChatConfig
+  pet?: PetConfig | null
+  petWander?: boolean
 }
 
 export const DEFAULT_SYSTEM_PROMPT = `You are a helpful and knowledgeable AI assistant.

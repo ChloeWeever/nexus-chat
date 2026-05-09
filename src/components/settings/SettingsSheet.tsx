@@ -20,6 +20,7 @@ import { useAppStore } from '@/store'
 import { DEFAULT_SETTINGS } from '@/types'
 import { cn } from '@/lib/utils'
 import SkillsManager from '@/components/skills/SkillsManager'
+import PetdexGallery from './PetdexGallery'
 
 interface SettingsSheetProps {
   open: boolean
@@ -471,6 +472,24 @@ export default function SettingsSheet({ open, onClose }: SettingsSheetProps): JS
                       </button>
                     ))}
                   </div>
+                </Section>
+
+                <Section title="Desktop Pet">
+                  <Hint>A companion in the chat area. Drag to reposition, right-click to hide.</Hint>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Allow wandering</Label>
+                      <Hint>Pet occasionally walks around on its own.</Hint>
+                    </div>
+                    <Switch.Root
+                      checked={settings.petWander !== false}
+                      onCheckedChange={(v) => updateSettings({ petWander: v })}
+                      className="h-5 w-9 rounded-full bg-muted data-[state=checked]:bg-primary transition-colors shrink-0"
+                    >
+                      <Switch.Thumb className="block h-4 w-4 rounded-full bg-white shadow-sm transition-transform data-[state=checked]:translate-x-4 translate-x-0.5" />
+                    </Switch.Root>
+                  </div>
+                  <PetdexGallery />
                 </Section>
               </Tabs.Content>
             </div>
