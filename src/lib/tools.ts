@@ -43,7 +43,39 @@ export const RUN_CODE_TOOL = {
   }
 }
 
-// Build a `use_skill` tool whose enum is the list of invocable skill names.
+export const GENERATE_ANIMATION_TOOL = {
+  type: 'function' as const,
+  function: {
+    name: 'generate_animation',
+    description:
+      'Create a self-contained animated HTML visualization to explain a concept visually. ' +
+      'Use this whenever an animation would genuinely help the user understand something: ' +
+      'algorithms, data structures, network protocols, physics, math, biological processes, ' +
+      'step-by-step workflows, etc. Always add clear labels and narration text inside the animation. ' +
+      'Prefer a dark background. You may load GSAP from ' +
+      'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js for complex motion.',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: {
+          type: 'string',
+          description: 'Short descriptive title, e.g. "How TCP Three-Way Handshake Works"'
+        },
+        html: {
+          type: 'string',
+          description:
+            'Complete self-contained HTML document with all CSS and JavaScript inline. ' +
+            'Will be rendered in a sandboxed iframe (allow-scripts only, no network from sandbox). ' +
+            'External scripts must be loaded via <script src="..."> inside the HTML. ' +
+            'Target 16:9 aspect ratio, designed for ~680×360 px.'
+        }
+      },
+      required: ['title', 'html']
+    }
+  }
+}
+
+
 // The agent calls this to load a skill's full instructions on demand.
 export function buildUseSkillTool(skillNames: string[]) {
   return {

@@ -101,6 +101,8 @@ export interface ToolUseInfo {
   error?: string
   isPending?: boolean
   code?: string         // source code, set for run_code tool calls
+  animationHtml?: string   // full HTML, set for generate_animation tool calls
+  animationTitle?: string  // display title for the animation iframe
 }
 
 export interface Skill {
@@ -171,6 +173,7 @@ export interface ChatConfig {
   webSearchEnabled: boolean
   ollamaApiKey: string
   codeExecutionEnabled: boolean
+  animationEnabled: boolean
 }
 
 export interface AppSettings {
@@ -239,6 +242,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     streamingEnabled: true,
     webSearchEnabled: false,
     ollamaApiKey: '',
-    codeExecutionEnabled: false
+    codeExecutionEnabled: false,
+    animationEnabled: false
   }
 }

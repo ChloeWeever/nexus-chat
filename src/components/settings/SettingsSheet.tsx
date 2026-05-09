@@ -347,8 +347,29 @@ export default function SettingsSheet({ open, onClose }: SettingsSheetProps): JS
                 </Section>
               </Tabs.Content>
 
-              {/* Tools (Web Search + Code Execution) */}
+              {/* Tools (Web Search + Code Execution + Animation) */}
               <Tabs.Content value="tools" className="space-y-6">
+                <Section title="Animation Generation">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <Label>Enable Animation Generation</Label>
+                      <Hint>
+                        Let the AI generate animated HTML visualizations to explain complex concepts.
+                        Animations render inline in the chat using a sandboxed iframe.
+                      </Hint>
+                    </div>
+                    <Switch.Root
+                      checked={settings.chat.animationEnabled}
+                      onCheckedChange={(v) =>
+                        updateSettings({ chat: { ...settings.chat, animationEnabled: v } })
+                      }
+                      className="h-5 w-9 rounded-full bg-muted data-[state=checked]:bg-primary transition-colors shrink-0 mt-1"
+                    >
+                      <Switch.Thumb className="block h-4 w-4 rounded-full bg-white shadow-sm transition-transform data-[state=checked]:translate-x-4 translate-x-0.5" />
+                    </Switch.Root>
+                  </div>
+                </Section>
+
                 <Section title="Code Execution">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
