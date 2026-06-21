@@ -5,13 +5,14 @@ import { cn, generateId } from '@/lib/utils'
 import {
   WEB_SEARCH_TOOL,
   RUN_CODE_TOOL,
+  PLAN_TOOL,
   buildUseSkillTool,
   buildSkillsSystemMessage,
   type OpenAIMessage,
   type OpenAIContentPart,
   type OpenAIToolCall
 } from '@/lib/tools'
-import type { ToolUseInfo, Skill } from '@/types'
+import type { ToolUseInfo, Skill, PlanStep } from '@/types'
 
 interface MessageInputProps {
   conversationId: string
@@ -104,6 +105,7 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
+  const abortRef = useRef(false)
 
   const {
     settings,
@@ -113,10 +115,12 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
     setPendingPrompt,
     addMessage,
     appendToMessage,
+    appendThinkingToMessage,
     finalizeMessage,
     setMessageError,
     setMessageToolUse,
     setMessageStatus,
+    setPlanSteps,
     isStreaming,
     setIsStreaming
   } = useAppStore()
@@ -183,6 +187,7 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
   }
 
   const handleStop = () => {
+    abortRef.current = true
     cleanupRef.current?.()
     cleanupRef.current = null
     setIsStreaming(false)
@@ -244,7 +249,8 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
   const streamInto = (
     messages: OpenAIMessage[],
     assistantMsgId: string,
-    req: { provider?: string; baseUrl: string; apiKey: string }
+    req: { provider?: string; baseUrl: string; apiKey: string },
+    onDone?: () => void
   ): void => {
     const cleanup = window.api.llmStream(
       {
@@ -263,12 +269,14 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
         finalizeMessage(conversationId, assistantMsgId)
         setIsStreaming(false)
         cleanupRef.current = null
+        onDone?.()
       },
       (errMsg) => {
         setMessageError(conversationId, assistantMsgId, errMsg)
         setIsStreaming(false)
         cleanupRef.current = null
-      }
+      },
+      (thinkingDelta) => appendThinkingToMessage(conversationId, assistantMsgId, thinkingDelta)
     )
     cleanupRef.current = cleanup
   }
@@ -277,6 +285,8 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
     const text = input.trim()
     const isParsing = attachedFiles.some((f) => f.parsing)
     if ((!text && attachedFiles.length === 0) || isStreaming || isParsing || !conversation) return
+
+    abortRef.current = false
 
     setInput('')
     setAttachedFiles([])
@@ -373,6 +383,7 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
 
     // ── Agentic tool loop (OpenAI/LiteLLM only) ──────────────────────────────
     const tools = [
+      PLAN_TOOL,
       ...(webSearchEnabled ? [WEB_SEARCH_TOOL] : []),
       ...(codeExecutionEnabled ? [RUN_CODE_TOOL] : []),
       ...(!explicitSkill && autoSkills.length > 0
@@ -383,148 +394,270 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
     if (tools.length > 0) {
       setMessageStatus(conversationId, assistantMsgId, 'Thinking…')
 
-      const firstResult = await window.api.llmFetch({
-        ...req,
-        body: {
-          model: settings.litellm.model,
-          messages,
-          tools,
-          tool_choice: 'auto',
-          max_tokens: settings.litellm.maxTokens,
-          temperature: settings.litellm.temperature,
-          stream: false
-        }
-      })
+      // ── Agentic loop: keep calling LLM until it stops requesting tools ──────
+      let currentMessages: OpenAIMessage[] = [...messages]
+      let planSteps: PlanStep[] = []
+      const allToolUseInfo: ToolUseInfo[] = []
 
-      if (firstResult.error) {
-        setMessageError(conversationId, assistantMsgId, firstResult.error)
-        setIsStreaming(false)
-        return
+      const pushStep = (step: PlanStep) => {
+        planSteps = [...planSteps, step]
+        setPlanSteps(conversationId, assistantMsgId, planSteps)
+      }
+      const patchStep = (id: string, update: Partial<PlanStep>) => {
+        planSteps = planSteps.map((s) => (s.id === id ? { ...s, ...update } : s))
+        setPlanSteps(conversationId, assistantMsgId, planSteps)
       }
 
-      const firstData = firstResult.data as {
-        choices: Array<{
-          finish_reason: string
-          message: { role: string; content: string | null; tool_calls?: OpenAIToolCall[] }
-        }>
-      }
-      const choice = firstData.choices?.[0]
-
-      if (choice?.finish_reason !== 'tool_calls' || !choice.message.tool_calls?.length) {
-        appendToMessage(conversationId, assistantMsgId, choice?.message?.content ?? '')
+      // Returns true if the user stopped — caller must return immediately
+      const wasAborted = () => {
+        if (!abortRef.current) return false
         finalizeMessage(conversationId, assistantMsgId)
-        setIsStreaming(false)
-        return
+        return true
       }
 
-      // ── Execute tool calls ────────────────────────────────────────────────
-      const toolCallResults: OpenAIMessage[] = []
-      const toolUseInfo: ToolUseInfo[] = []
+      const MAX_ITERATIONS = 10
+      for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
+        const iterResult = await window.api.llmFetch({
+          ...req,
+          body: {
+            model: settings.litellm.model,
+            messages: currentMessages,
+            tools,
+            tool_choice: 'auto',
+            max_tokens: settings.litellm.maxTokens,
+            temperature: settings.litellm.temperature,
+            stream: false
+          }
+        })
 
-      for (const call of choice.message.tool_calls) {
-        let args: Record<string, unknown>
-        try {
-          args = JSON.parse(call.function.arguments)
-        } catch {
-          continue
+        if (wasAborted()) return
+
+        if (iterResult.error) {
+          setMessageError(conversationId, assistantMsgId, iterResult.error)
+          setIsStreaming(false)
+          return
         }
 
-        if (call.function.name === 'web_search') {
-          const query = String(args.query ?? '')
-          setMessageStatus(conversationId, assistantMsgId, `Searching "${query}"…`)
+        const iterData = iterResult.data as {
+          choices: Array<{
+            finish_reason: string
+            message: { role: string; content: string | null; tool_calls?: OpenAIToolCall[] }
+          }>
+        }
+        const choice = iterData.choices?.[0]
 
-          const searchResult = await window.api.webSearch({
-            query,
-            maxResults: (args.max_results as number) ?? 5,
-            apiKey: settings.chat.ollamaApiKey
-          })
-
-          let toolContent: string
-          let sublabel: string
-          if (searchResult.error) {
-            toolContent = `Web search failed: ${searchResult.error}`
-            sublabel = 'failed'
+        // No tool calls → stream the final response
+        if (choice?.finish_reason !== 'tool_calls' || !choice.message.tool_calls?.length) {
+          // If no tools were ever called (simple answer), stream directly
+          if (allToolUseInfo.length === 0 && planSteps.length === 0) {
+            appendToMessage(conversationId, assistantMsgId, choice?.message?.content ?? '')
+            finalizeMessage(conversationId, assistantMsgId)
+            setIsStreaming(false)
           } else {
-            const data = searchResult.data as {
-              results: Array<{ title: string; url: string; content: string }>
+            // Add "Write response" step then stream
+            const writingStepId = generateId()
+            if (planSteps.length > 0) {
+              pushStep({ id: writingStepId, title: 'Write response', status: 'in_progress' })
             }
-            const count = data.results?.length ?? 0
-            sublabel = `${count} result${count !== 1 ? 's' : ''}`
-            toolContent = data.results
-              .map((r) => `### ${r.title}\nURL: ${r.url}\n${r.content}`)
-              .join('\n\n---\n\n')
+            streamInto(currentMessages, assistantMsgId, req, () => {
+              if (planSteps.length > 0) patchStep(writingStepId, { status: 'done' })
+            })
+          }
+          return
+        }
+
+        // ── Execute this round's tool calls ────────────────────────────────
+        const roundToolResults: OpenAIMessage[] = []
+
+        for (const call of choice.message.tool_calls) {
+          if (wasAborted()) return
+
+          let args: Record<string, unknown>
+          try {
+            args = JSON.parse(call.function.arguments)
+          } catch {
+            continue
           }
 
-          toolCallResults.push({ role: 'tool', tool_call_id: call.id, content: toolContent })
-          toolUseInfo.push({
-            toolCallId: call.id,
-            toolName: 'web_search',
-            label: query,
-            sublabel,
-            error: searchResult.error
-          })
-        } else if (call.function.name === 'run_code') {
-          const code = String(args.code ?? '')
-          setMessageStatus(conversationId, assistantMsgId, 'Running code…')
-
-          const result = await window.api.runJS({ code })
-
-          let toolContent: string
-          if (!result.output && result.error) {
-            toolContent = `Error: ${result.error}`
-          } else {
-            toolContent = result.output ?? '(no output)'
-            if (result.error) toolContent += `\nError: ${result.error}`
-          }
-
-          toolCallResults.push({ role: 'tool', tool_call_id: call.id, content: toolContent })
-          toolUseInfo.push({
-            toolCallId: call.id,
-            toolName: 'run_code',
-            label: code.split('\n')[0].slice(0, 60) || 'code',
-            sublabel: result.error ? 'error' : 'done',
-            error: result.error,
-            code
-          })
-        } else if (call.function.name === 'use_skill') {
-          const skillName = String(args.skill_name ?? '')
-          const skill = autoSkills.find((s) => s.name === skillName)
-
-          if (skill) {
-            setMessageStatus(conversationId, assistantMsgId, `Reading /${skill.name}…`)
-            toolCallResults.push({
+          if (call.function.name === 'create_plan') {
+            const rawSteps = (args.steps as Array<{ title: string; detail?: string }>) ?? []
+            planSteps = rawSteps.map((s) => ({
+              id: generateId(),
+              title: s.title,
+              detail: s.detail,
+              status: 'pending' as const
+            }))
+            setPlanSteps(conversationId, assistantMsgId, planSteps)
+            setMessageStatus(conversationId, assistantMsgId, 'Planning…')
+            roundToolResults.push({
               role: 'tool',
               tool_call_id: call.id,
-              content: skill.instructions
+              content: 'Plan acknowledged. Proceed with execution step by step.'
             })
-            toolUseInfo.push({
+          } else if (call.function.name === 'web_search') {
+            const query = String(args.query ?? '')
+            setMessageStatus(conversationId, assistantMsgId, `Searching "${query}"…`)
+
+            // Claim the next pending model-plan step, or create a new step
+            const pendingStep = planSteps.find((s) => s.status === 'pending')
+            let stepId: string
+            if (pendingStep) {
+              stepId = pendingStep.id
+              patchStep(stepId, { status: 'in_progress', toolName: 'web_search', detail: query, input: query })
+            } else {
+              stepId = generateId()
+              pushStep({ id: stepId, title: `Search: ${query}`, status: 'in_progress', toolName: 'web_search', input: query })
+            }
+
+            const searchResult = await window.api.webSearch({
+              query,
+              maxResults: (args.max_results as number) ?? 5,
+              apiKey: settings.chat.ollamaApiKey
+            })
+
+            if (wasAborted()) return
+
+            let toolContent: string
+            let sublabel: string
+            if (searchResult.error) {
+              toolContent = `Web search failed: ${searchResult.error}`
+              sublabel = 'failed'
+              patchStep(stepId, { status: 'error', sublabel, output: `Web search failed: ${searchResult.error}` })
+            } else {
+              const data = searchResult.data as {
+                results: Array<{ title: string; url: string; content: string }>
+              }
+              const count = data.results?.length ?? 0
+              sublabel = `${count} result${count !== 1 ? 's' : ''}`
+              toolContent = data.results
+                .map((r) => `### ${r.title}\nURL: ${r.url}\n${r.content}`)
+                .join('\n\n---\n\n')
+              patchStep(stepId, { status: 'done', sublabel, output: toolContent })
+            }
+
+            roundToolResults.push({ role: 'tool', tool_call_id: call.id, content: toolContent })
+            allToolUseInfo.push({
               toolCallId: call.id,
-              toolName: 'use_skill',
-              label: skill.name,
-              sublabel: 'loaded'
+              toolName: 'web_search',
+              label: query,
+              sublabel,
+              error: searchResult.error
             })
-          } else {
-            toolCallResults.push({
-              role: 'tool',
-              tool_call_id: call.id,
-              content: `Skill "${skillName}" not found.`
+          } else if (call.function.name === 'run_code') {
+            const code = String(args.code ?? '')
+            setMessageStatus(conversationId, assistantMsgId, 'Running code…')
+
+            const pendingStep = planSteps.find((s) => s.status === 'pending')
+            let stepId: string
+            if (pendingStep) {
+              stepId = pendingStep.id
+              patchStep(stepId, {
+                status: 'in_progress',
+                toolName: 'run_code',
+                detail: code.split('\n')[0].slice(0, 80) || undefined,
+                input: code
+              })
+            } else {
+              stepId = generateId()
+              pushStep({
+                id: stepId,
+                title: 'Run code',
+                detail: code.split('\n')[0].slice(0, 80) || undefined,
+                status: 'in_progress',
+                toolName: 'run_code',
+                input: code
+              })
+            }
+
+            const result = await window.api.runJS({ code })
+
+            if (wasAborted()) return
+
+            let toolContent: string
+            if (!result.output && result.error) {
+              toolContent = `Error: ${result.error}`
+            } else {
+              toolContent = result.output ?? '(no output)'
+              if (result.error) toolContent += `\nError: ${result.error}`
+            }
+
+            const sublabel = result.error ? 'error' : 'done'
+            patchStep(stepId, { status: result.error ? 'error' : 'done', sublabel, output: toolContent })
+
+            roundToolResults.push({ role: 'tool', tool_call_id: call.id, content: toolContent })
+            allToolUseInfo.push({
+              toolCallId: call.id,
+              toolName: 'run_code',
+              label: code.split('\n')[0].slice(0, 60) || 'code',
+              sublabel,
+              error: result.error,
+              code
             })
+          } else if (call.function.name === 'use_skill') {
+            const skillName = String(args.skill_name ?? '')
+            const skill = autoSkills.find((s) => s.name === skillName)
+
+            const pendingStep = planSteps.find((s) => s.status === 'pending')
+            let stepId: string
+            if (pendingStep) {
+              stepId = pendingStep.id
+              patchStep(stepId, { status: 'in_progress', toolName: 'use_skill' })
+            } else {
+              stepId = generateId()
+              pushStep({
+                id: stepId,
+                title: `Load skill: ${skillName}`,
+                status: 'in_progress',
+                toolName: 'use_skill'
+              })
+            }
+
+            if (skill) {
+              setMessageStatus(conversationId, assistantMsgId, `Reading /${skill.name}…`)
+              roundToolResults.push({
+                role: 'tool',
+                tool_call_id: call.id,
+                content: skill.instructions
+              })
+              patchStep(stepId, { status: 'done', sublabel: 'loaded' })
+              allToolUseInfo.push({
+                toolCallId: call.id,
+                toolName: 'use_skill',
+                label: skill.name,
+                sublabel: 'loaded'
+              })
+            } else {
+              roundToolResults.push({
+                role: 'tool',
+                tool_call_id: call.id,
+                content: `Skill "${skillName}" not found.`
+              })
+              patchStep(stepId, { status: 'error', sublabel: 'not found' })
+            }
           }
         }
+
+        // Append assistant turn + tool results to message history for next iteration
+        currentMessages = [
+          ...currentMessages,
+          {
+            role: 'assistant',
+            content: choice.message.content,
+            tool_calls: choice.message.tool_calls
+          },
+          ...roundToolResults
+        ]
+
+        if (allToolUseInfo.length > 0) {
+          setMessageToolUse(conversationId, assistantMsgId, allToolUseInfo)
+        }
+
+        setMessageStatus(conversationId, assistantMsgId, 'Thinking…')
       }
 
-      setMessageToolUse(conversationId, assistantMsgId, toolUseInfo)
-
-      const augmented: OpenAIMessage[] = [
-        ...messages,
-        {
-          role: 'assistant',
-          content: choice.message.content,
-          tool_calls: choice.message.tool_calls
-        },
-        ...toolCallResults
-      ]
-      streamInto(augmented, assistantMsgId, req)
+      // Safety fallback if loop exhausted
+      setMessageError(conversationId, assistantMsgId, 'Too many tool call iterations.')
+      setIsStreaming(false)
       return
     }
 
@@ -575,10 +708,12 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
     skills,
     addMessage,
     appendToMessage,
+    appendThinkingToMessage,
     finalizeMessage,
     setMessageError,
     setMessageToolUse,
     setMessageStatus,
+    setPlanSteps,
     setIsStreaming
   ])
 
