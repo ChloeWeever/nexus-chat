@@ -93,6 +93,19 @@ export interface TextBlock {
 
 export type ContentBlock = TextBlock | CardBlock
 
+export type PlanStepStatus = 'pending' | 'in_progress' | 'done' | 'error'
+
+export interface PlanStep {
+  id: string
+  title: string
+  detail?: string
+  status: PlanStepStatus
+  toolName?: string   // 'web_search' | 'run_code' | 'use_skill' — set for tool-execution steps
+  sublabel?: string   // result summary, e.g. "5 results", "done", "error"
+  input?: string      // tool input: query text, code, skill name, etc.
+  output?: string     // tool output: search results, code output, error text, etc.
+}
+
 export interface ToolUseInfo {
   toolCallId: string
   toolName: string      // function name, e.g. "web_search"
@@ -126,6 +139,7 @@ export interface Message {
   id: string
   role: Role
   content: string
+  thinking?: string           // reasoning/thinking content, shown collapsed above response
   blocks?: ContentBlock[]
   toolUse?: ToolUseInfo[]
   skillUsed?: string          // skill name when message was sent via /skill-name command
@@ -133,6 +147,7 @@ export interface Message {
   isStreaming?: boolean
   error?: string
   attachments?: MessageAttachment[]
+  planSteps?: PlanStep[]
   timestamp: number
 }
 

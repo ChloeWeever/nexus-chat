@@ -187,18 +187,27 @@ function buildAnthropicBody(body: Record<string, unknown>): Record<string, unkno
   }
 }
 
-function extractStreamDelta(line: string, provider?: string): string | null {
+function extractStreamDelta(line: string, provider?: string): { delta?: string; thinking?: string } | null {
   if (!line.startsWith('data: ')) return null
   const raw = line.slice(6).trim()
   if (raw === '[DONE]') return null
   try {
     const json = JSON.parse(raw)
     if (provider === 'anthropic') {
-      if (json.type === 'content_block_delta' && json.delta?.type === 'text_delta')
-        return json.delta.text ?? null
+      if (json.type === 'content_block_delta') {
+        if (json.delta?.type === 'text_delta') return { delta: json.delta.text ?? '' }
+        if (json.delta?.type === 'thinking_delta') return { thinking: json.delta.thinking ?? '' }
+      }
       return null
     }
-    return json.choices?.[0]?.delta?.content ?? null
+    // OpenAI / LiteLLM: reasoning_content for thinking models (DeepSeek-R1, Qwen QwQ, etc.)
+    const choice = json.choices?.[0]?.delta
+    if (!choice) return null
+    const thinking = choice.reasoning_content ?? null
+    const delta = choice.content ?? null
+    if (thinking) return { thinking }
+    if (delta) return { delta }
+    return null
   } catch {
     return null
   }
@@ -251,6 +260,18 @@ ipcMain.handle('llm:fetch-stream', async (event, req: LLMRequest & { requestId: 
     const request = net.request({ url, method: 'POST' })
     for (const [k, v] of Object.entries(headers)) request.setHeader(k, v)
 
+    // Idle timeout: abort if no data received for 60s (long responses are fine, stalls are not)
+    let idleTimer: ReturnType<typeof setTimeout> | null = null
+    const resetIdle = () => {
+      if (idleTimer) clearTimeout(idleTimer)
+      idleTimer = setTimeout(() => {
+        request.abort()
+        event.sender.send(`llm:chunk:${req.requestId}`, { error: 'Stream idle timeout (60s without data)' })
+        resolve({ error: 'Stream idle timeout' })
+      }, 60_000)
+    }
+    resetIdle()
+
     request.on('response', (response) => {
       console.log('[LLM] HTTP', response.statusCode)
 
@@ -258,6 +279,7 @@ ipcMain.handle('llm:fetch-stream', async (event, req: LLMRequest & { requestId: 
         let errBody = ''
         response.on('data', (chunk) => (errBody += chunk.toString()))
         response.on('end', () => {
+          if (idleTimer) clearTimeout(idleTimer)
           const msg = `HTTP ${response.statusCode}: ${errBody}`
           event.sender.send(`llm:chunk:${req.requestId}`, { error: msg })
           resolve({ error: msg })
@@ -267,6 +289,7 @@ ipcMain.handle('llm:fetch-stream', async (event, req: LLMRequest & { requestId: 
 
       let buffer = ''
       response.on('data', (chunk: Buffer) => {
+        resetIdle()
         buffer += chunk.toString('utf8')
         const lines = buffer.split('\n')
         buffer = lines.pop() ?? ''
@@ -275,27 +298,32 @@ ipcMain.handle('llm:fetch-stream', async (event, req: LLMRequest & { requestId: 
           const trimmed = line.trim()
           if (!trimmed) continue
           if (isStreamDone(trimmed, req.provider)) {
+            if (idleTimer) clearTimeout(idleTimer)
             event.sender.send(`llm:chunk:${req.requestId}`, { done: true })
             resolve({})
             return
           }
-          const delta = extractStreamDelta(trimmed, req.provider)
-          if (delta) event.sender.send(`llm:chunk:${req.requestId}`, { delta })
+          const result = extractStreamDelta(trimmed, req.provider)
+          if (result?.thinking) event.sender.send(`llm:chunk:${req.requestId}`, { thinking: result.thinking })
+          else if (result?.delta) event.sender.send(`llm:chunk:${req.requestId}`, { delta: result.delta })
         }
       })
 
       response.on('end', () => {
+        if (idleTimer) clearTimeout(idleTimer)
         event.sender.send(`llm:chunk:${req.requestId}`, { done: true })
         resolve({})
       })
 
       response.on('error', (err) => {
+        if (idleTimer) clearTimeout(idleTimer)
         event.sender.send(`llm:chunk:${req.requestId}`, { error: err.message })
         resolve({ error: err.message })
       })
     })
 
     request.on('error', (err) => {
+      if (idleTimer) clearTimeout(idleTimer)
       event.sender.send(`llm:chunk:${req.requestId}`, { error: err.message })
       resolve({ error: err.message })
     })
@@ -319,8 +347,8 @@ ipcMain.handle('llm:fetch', async (_event, req: LLMRequest) => {
 
     const timer = setTimeout(() => {
       request.abort()
-      resolve({ error: 'Request timed out after 60s' })
-    }, 60_000)
+      resolve({ error: 'Request timed out after 5m' })
+    }, 300_000)
 
     request.on('response', (response) => {
       let respBody = ''

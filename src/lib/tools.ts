@@ -78,6 +78,41 @@ export function buildSkillsSystemMessage(skills: Pick<Skill, 'name' | 'descripti
   )
 }
 
+export const PLAN_TOOL = {
+  type: 'function' as const,
+  function: {
+    name: 'create_plan',
+    description:
+      'For complex multi-step tasks, call this FIRST to outline your plan before executing. ' +
+      'Each step will be shown to the user with a live status indicator. ' +
+      'Do NOT call this for simple questions or single-step tasks.',
+    parameters: {
+      type: 'object',
+      properties: {
+        steps: {
+          type: 'array',
+          description: 'Ordered list of steps to complete the task',
+          items: {
+            type: 'object',
+            properties: {
+              title: {
+                type: 'string',
+                description: 'Short step label (max ~60 chars) shown in the plan panel'
+              },
+              detail: {
+                type: 'string',
+                description: 'Optional one-sentence description of what this step does'
+              }
+            },
+            required: ['title']
+          }
+        }
+      },
+      required: ['steps']
+    }
+  }
+}
+
 export interface OpenAIToolCall {
   id: string
   type: 'function'

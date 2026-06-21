@@ -12,21 +12,22 @@ function llmStream(
   },
   onChunk: (delta: string) => void,
   onDone: () => void,
-  onError: (msg: string) => void
+  onError: (msg: string) => void,
+  onThinking?: (delta: string) => void
 ): () => void {
   const channel = `llm:chunk:${req.requestId}`
 
   const listener = (
     _event: unknown,
-    data: { delta?: string; done?: boolean; error?: string }
+    data: { delta?: string; thinking?: string; done?: boolean; error?: string }
   ): void => {
     if (data.error) onError(data.error)
     else if (data.done) onDone()
+    else if (data.thinking) onThinking?.(data.thinking)
     else if (data.delta) onChunk(data.delta)
   }
 
   ipcRenderer.on(channel, listener)
-  // Fire and forget — chunks come back on the channel above
   ipcRenderer.invoke('llm:fetch-stream', req).catch((err: Error) => {
     onError(err.message)
   })

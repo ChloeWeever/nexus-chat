@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Conversation, Message, AppSettings, ToolUseInfo, Skill } from '@/types'
+import type { Conversation, Message, AppSettings, ToolUseInfo, Skill, PlanStep } from '@/types'
 import { DEFAULT_SETTINGS } from '@/types'
 import { generateId } from '@/lib/utils'
 import { parseContentBlocks } from '@/lib/card-parser'
@@ -24,11 +24,14 @@ interface AppStore {
   // Message actions
   addMessage: (conversationId: string, message: Omit<Message, 'id' | 'timestamp'>) => string
   appendToMessage: (conversationId: string, messageId: string, delta: string) => void
+  appendThinkingToMessage: (conversationId: string, messageId: string, delta: string) => void
   finalizeMessage: (conversationId: string, messageId: string) => void
   setMessageError: (conversationId: string, messageId: string, error: string) => void
   setMessageToolUse: (conversationId: string, messageId: string, toolUse: ToolUseInfo[]) => void
   setMessageStatus: (conversationId: string, messageId: string, statusText: string) => void
   removeMessage: (conversationId: string, messageId: string) => void
+  setPlanSteps: (conversationId: string, messageId: string, steps: PlanStep[]) => void
+  updatePlanStep: (conversationId: string, messageId: string, stepId: string, update: Partial<PlanStep>) => void
 
   // Streaming state
   setIsStreaming: (value: boolean) => void
@@ -158,6 +161,21 @@ export const useAppStore = create<AppStore>()(
         }))
       },
 
+      appendThinkingToMessage: (conversationId, messageId, delta) => {
+        set((state) => ({
+          conversations: state.conversations.map((c) => {
+            if (c.id !== conversationId) return c
+            return {
+              ...c,
+              messages: c.messages.map((m) => {
+                if (m.id !== messageId) return m
+                return { ...m, thinking: (m.thinking ?? '') + delta }
+              })
+            }
+          })
+        }))
+      },
+
       finalizeMessage: (conversationId, messageId) => {
         set((state) => ({
           conversations: state.conversations.map((c) => {
@@ -230,6 +248,41 @@ export const useAppStore = create<AppStore>()(
               ...c,
               messages: c.messages.filter((m) => m.id !== messageId),
               updatedAt: Date.now()
+            }
+          })
+        }))
+      },
+
+      setPlanSteps: (conversationId, messageId, steps) => {
+        set((state) => ({
+          conversations: state.conversations.map((c) => {
+            if (c.id !== conversationId) return c
+            return {
+              ...c,
+              messages: c.messages.map((m) => {
+                if (m.id !== messageId) return m
+                return { ...m, planSteps: steps }
+              })
+            }
+          })
+        }))
+      },
+
+      updatePlanStep: (conversationId, messageId, stepId, update) => {
+        set((state) => ({
+          conversations: state.conversations.map((c) => {
+            if (c.id !== conversationId) return c
+            return {
+              ...c,
+              messages: c.messages.map((m) => {
+                if (m.id !== messageId) return m
+                return {
+                  ...m,
+                  planSteps: m.planSteps?.map((s) =>
+                    s.id === stepId ? { ...s, ...update } : s
+                  )
+                }
+              })
             }
           })
         }))
